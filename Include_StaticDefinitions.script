@@ -1,0 +1,224 @@
+%General Mission Analysis Tool(GMAT) Script
+%Created: 2018-04-14 15:37:57
+%This file complements the ModelMissionTemplate.script
+%	as it contains those resources which are NOT points of
+%	variation.  
+%Resources which are modified by the GMAT Automation scripts
+%	should NOT appear in this file (or should be commented out),
+%	nor should any GMAT Create commands or Mission Sequence commands
+%	be defined in this file.  
+%All Create commands must be defined in the top level model,
+%	which automation will copy from the ModelMissionTemplate.script file.
+%It is a convention [TBR] that the Mission and user defined variables,
+%	arrays and strings should be defined in the top level model.
+%Thus user definied variables, arrays and strings are Created and
+%	initialized in the Model Mission Template, NOT in this file.
+%Note that GMAT resources may be easily added to the dictionary definitions
+%	in modepov.py and automation will look for them within the configuration
+%	specification workbook.  In this use-case the static definition in
+%	this file should be commented out or removed because the resource will be
+%	dynamically created by the automation scripts.
+
+%----------------------------------------
+%---------- Spacecraft
+%----------------------------------------
+
+%Create Spacecraft EOTV;
+GMAT EOTV.DateFormat = UTCGregorian;
+%GMAT EOTV.Epoch = '30 Dec 2020 23:59:28.000';
+GMAT EOTV.CoordinateSystem = EarthMJ2000Eq;
+GMAT EOTV.DisplayStateType = Keplerian;
+GMAT EOTV.SMA = 6578.136000000018;
+GMAT EOTV.ECC = 0.02454974900597826;
+%GMAT EOTV.INC = 28.50000000000004;
+GMAT EOTV.RAAN = 306.6148021947984;
+GMAT EOTV.AOP = 314.1905515359986;
+GMAT EOTV.TA = 99.88774933204506;
+%GMAT EOTV.DryMass = 1024.5;
+GMAT EOTV.Cd = 2.2;
+GMAT EOTV.Cr = 1.8;
+GMAT EOTV.DragArea = 15;
+GMAT EOTV.SRPArea = 1;
+GMAT EOTV.Tanks = {RAPTank1};
+GMAT EOTV.Thrusters = {HET1};
+GMAT EOTV.PowerSystem = EOTVSolarArrays;
+GMAT EOTV.NAIFId = -10004001;
+GMAT EOTV.NAIFIdReferenceFrame = -9004001;
+GMAT EOTV.OrbitColor = Red;
+GMAT EOTV.TargetColor = Teal;
+GMAT EOTV.EstimationStateType = 'Cartesian';
+GMAT EOTV.OrbitErrorCovariance = [ 1e+070 0 0 0 0 0 ; 0 1e+070 0 0 0 0 ; 0 0 1e+070 0 0 0 ; 0 0 0 1e+070 0 0 ; 0 0 0 0 1e+070 0 ; 0 0 0 0 0 1e+070 ];
+GMAT EOTV.CdSigma = 1e+070;
+GMAT EOTV.CrSigma = 1e+070;
+GMAT EOTV.Id = 'SatId';
+GMAT EOTV.Attitude = CoordinateSystemFixed;
+GMAT EOTV.SPADSRPScaleFactor = 1;
+GMAT EOTV.ModelFile = 'aura.3ds';
+GMAT EOTV.ModelOffsetX = 0;
+GMAT EOTV.ModelOffsetY = 0;
+GMAT EOTV.ModelOffsetZ = 0;
+GMAT EOTV.ModelRotationX = 0;
+GMAT EOTV.ModelRotationY = 0;
+GMAT EOTV.ModelRotationZ = 0;
+GMAT EOTV.ModelScale = 1;
+GMAT EOTV.AttitudeDisplayStateType = 'Quaternion';
+GMAT EOTV.AttitudeRateDisplayStateType = 'AngularVelocity';
+GMAT EOTV.AttitudeCoordinateSystem = EarthMJ2000Eq;
+GMAT EOTV.EulerAngleSequence = '321';
+
+%----------------------------------------
+%---------- Hardware Components
+%----------------------------------------
+
+%Create ElectricThruster HET1;
+GMAT HET1.CoordinateSystem = Local;
+GMAT HET1.Origin = Earth;
+GMAT HET1.Axes = VNB;
+GMAT HET1.ThrustDirection1 = 1;
+GMAT HET1.ThrustDirection2 = 0;
+GMAT HET1.ThrustDirection3 = 0;
+GMAT HET1.DutyCycle = 1;
+GMAT HET1.ThrustScaleFactor = 1;
+GMAT HET1.DecrementMass = true;
+GMAT HET1.Tank = {RAPTank1};
+GMAT HET1.MixRatio = [ 1 ];
+GMAT HET1.GravitationalAccel = 9.810000000000001;
+GMAT HET1.ThrustModel = ConstantThrustAndIsp;
+%GMAT HET1.MaximumUsablePower = 8;
+%GMAT HET1.MinimumUsablePower = 5;
+GMAT HET1.ThrustCoeff1 = -5.19082;
+GMAT HET1.ThrustCoeff2 = 2.96519;
+GMAT HET1.ThrustCoeff3 = -14.4789;
+GMAT HET1.ThrustCoeff4 = 54.05382;
+GMAT HET1.ThrustCoeff5 = -0.00100092;
+GMAT HET1.MassFlowCoeff1 = -0.004776;
+GMAT HET1.MassFlowCoeff2 = 0.05717;
+GMAT HET1.MassFlowCoeff3 = -0.09956;
+GMAT HET1.MassFlowCoeff4 = 0.03211;
+GMAT HET1.MassFlowCoeff5 = 2.13781;
+%GMAT HET1.FixedEfficiency = 0.7;
+%GMAT HET1.Isp = 1977;
+%GMAT HET1.ConstantThrust = 11.28;
+
+%Create SolarPowerSystem EOTVSolarArrays;
+GMAT EOTVSolarArrays.EpochFormat = 'UTCGregorian';
+GMAT EOTVSolarArrays.InitialEpoch = ''30 Dec 2020 23:59:28.000'';
+%GMAT EOTVSolarArrays.InitialMaxPower = 196968;
+GMAT EOTVSolarArrays.AnnualDecayRate = 5;
+GMAT EOTVSolarArrays.Margin = 1;
+GMAT EOTVSolarArrays.BusCoeff1 = 0.3;
+GMAT EOTVSolarArrays.BusCoeff2 = 0;
+GMAT EOTVSolarArrays.BusCoeff3 = 0;
+GMAT EOTVSolarArrays.ShadowModel = 'None';
+GMAT EOTVSolarArrays.ShadowBodies = {'Earth'};
+GMAT EOTVSolarArrays.SolarCoeff1 = 1.32077;
+GMAT EOTVSolarArrays.SolarCoeff2 = -0.10848;
+GMAT EOTVSolarArrays.SolarCoeff3 = -0.11665;
+GMAT EOTVSolarArrays.SolarCoeff4 = 0.10843;
+GMAT EOTVSolarArrays.SolarCoeff5 = -0.01279;
+
+%Create ElectricTank RAPTank1;
+GMAT RAPTank1.AllowNegativeFuelMass = false;
+%GMAT RAPTank1.FuelMass = 2600;
+
+%----------------------------------------
+%---------- ForceModels
+%----------------------------------------
+
+%Create ForceModel DefaultProp_ForceModel;
+GMAT DefaultProp_ForceModel.CentralBody = Earth;
+GMAT DefaultProp_ForceModel.PrimaryBodies = {Earth};
+GMAT DefaultProp_ForceModel.Drag = None;
+GMAT DefaultProp_ForceModel.SRP = Off;
+GMAT DefaultProp_ForceModel.RelativisticCorrection = Off;
+GMAT DefaultProp_ForceModel.ErrorControl = RSSStep;
+GMAT DefaultProp_ForceModel.GravityField.Earth.Degree = 4;
+GMAT DefaultProp_ForceModel.GravityField.Earth.Order = 4;
+GMAT DefaultProp_ForceModel.GravityField.Earth.PotentialFile = 'JGM2.cof';
+GMAT DefaultProp_ForceModel.GravityField.Earth.EarthTideModel = 'None';
+
+%----------------------------------------
+%---------- Propagators
+%----------------------------------------
+
+%Create Propagator DefaultProp;
+GMAT DefaultProp.FM = DefaultProp_ForceModel;
+GMAT DefaultProp.Type = PrinceDormand78;
+GMAT DefaultProp.InitialStepSize = 60;
+GMAT DefaultProp.Accuracy = 9.999999999999999e-012;
+GMAT DefaultProp.MinStep = 0.001;
+GMAT DefaultProp.MaxStep = 300;
+GMAT DefaultProp.MaxStepAttempts = 1450;
+GMAT DefaultProp.StopIfAccuracyIsViolated = true;
+
+%----------------------------------------
+%---------- Burns
+%----------------------------------------
+
+%Create FiniteBurn DefaultFB;
+GMAT DefaultFB.Thrusters = {HET1};
+GMAT DefaultFB.ThrottleLogicAlgorithm = 'MaxNumberOfThrusters';
+
+%----------------------------------------
+%---------- Subscribers
+%----------------------------------------
+
+%Create OrbitView DefaultOrbitView;
+GMAT DefaultOrbitView.SolverIterations = Current;
+GMAT DefaultOrbitView.UpperLeft = [ 0 0 ];
+GMAT DefaultOrbitView.Size = [ 0.9174484052532833 0.9886363636363637 ];
+GMAT DefaultOrbitView.RelativeZOrder = 4;
+GMAT DefaultOrbitView.Maximized = false;
+GMAT DefaultOrbitView.Add = {EOTV, Earth};
+GMAT DefaultOrbitView.CoordinateSystem = EarthMJ2000Eq;
+%GMAT DefaultOrbitView.DrawObject = [ true true ];
+GMAT DefaultOrbitView.DrawObject = [ false false ];
+GMAT DefaultOrbitView.DataCollectFrequency = 1;
+GMAT DefaultOrbitView.UpdatePlotFrequency = 50;
+GMAT DefaultOrbitView.NumPointsToRedraw = 0;
+%GMAT DefaultOrbitView.ShowPlot = true;
+GMAT DefaultOrbitView.ShowPlot = false;
+%GMAT DefaultOrbitView.ShowLabels = true;
+GMAT DefaultOrbitView.ShowLabels = false;
+GMAT DefaultOrbitView.ViewPointReference = Earth;
+%GMAT DefaultOrbitView.ViewPointVector = [ 55000 0 0 ];
+GMAT DefaultOrbitView.ViewDirection = Earth;
+GMAT DefaultOrbitView.ViewScaleFactor = 1;
+GMAT DefaultOrbitView.ViewUpCoordinateSystem = EarthMJ2000Eq;
+GMAT DefaultOrbitView.ViewUpAxis = Z;
+GMAT DefaultOrbitView.EclipticPlane = Off;
+GMAT DefaultOrbitView.XYPlane = On;
+GMAT DefaultOrbitView.WireFrame = Off;
+GMAT DefaultOrbitView.Axes = On;
+GMAT DefaultOrbitView.Grid = Off;
+GMAT DefaultOrbitView.SunLine = Off;
+GMAT DefaultOrbitView.UseInitialView = On;
+GMAT DefaultOrbitView.StarCount = 7000;
+GMAT DefaultOrbitView.EnableStars = On;
+GMAT DefaultOrbitView.EnableConstellations = On;
+
+%Create ReportFile ReportFile1;
+GMAT ReportFile1.SolverIterations = Current;
+GMAT ReportFile1.UpperLeft = [ 0 0 ];
+GMAT ReportFile1.Size = [ 0 0 ];
+GMAT ReportFile1.RelativeZOrder = 0;
+GMAT ReportFile1.Maximized = false;
+%GMAT ReportFile1.Filename = 'C:\Users\chelm\Documents\WorkingFolder\ProjectRoot\GMAT\ReportFile_AlfanoXfer.csv';
+GMAT ReportFile1.Precision = 16;
+GMAT ReportFile1.Add = {EOTV.ElapsedDays, EOTV.ElapsedSecs, EOTV.RAPTank1.FuelMass, EOTV.EOTVSolarArrays.ThrustPowerAvailable, EOTV.Earth.TA, EOTV.Earth.SMA, EOTV.EarthMJ2000Eq.RAAN, EOTV.EarthMJ2000Eq.AOP, EOTV.Earth.ECC, EOTV.EarthMJ2000Eq.INC, EOTV.Earth.OrbitPeriod, EOTV.HET1.ThrustDirection1, EOTV.HET1.ThrustDirection2, EOTV.HET1.ThrustDirection3, EOTV.Earth.BetaAngle};
+GMAT ReportFile1.WriteHeaders = true;
+GMAT ReportFile1.LeftJustify = On;
+GMAT ReportFile1.ZeroFill = Off;
+GMAT ReportFile1.FixedWidth = false;
+GMAT ReportFile1.Delimiter = ',';
+GMAT ReportFile1.ColumnWidth = 23;
+GMAT ReportFile1.WriteReport = true;
+
+%----------------------------------------
+%---------- Arrays, Variables, Strings - see ModelMissionTemplate
+%----------------------------------------
+
+%----------------------------------------
+%---------- Mission Sequence - see ModelMissionTemplate
+%----------------------------------------
+
