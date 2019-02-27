@@ -18,6 +18,9 @@
 %	specification workbook.  In this use-case the static definition in
 %	this file should be commented out or removed because the resource will be
 %	dynamically created by the automation scripts.
+%Updates of model parameters for R2018a have been made to this file, per GMAT runtime warnings:
+%	*** WARNING *** EstimationStateType is no longer used and will be removed in a future build.
+%	*** WARNING *** "EarthTideModel" field of GravityField is deprecated and will be removed from a future build; please use "TideModel" instead.
 
 %----------------------------------------
 %---------- Spacecraft
@@ -46,7 +49,7 @@ GMAT EOTV.NAIFId = -10004001;
 GMAT EOTV.NAIFIdReferenceFrame = -9004001;
 GMAT EOTV.OrbitColor = Red;
 GMAT EOTV.TargetColor = Teal;
-GMAT EOTV.EstimationStateType = 'Cartesian';
+%GMAT EOTV.EstimationStateType = 'Cartesian';
 GMAT EOTV.OrbitErrorCovariance = [ 1e+070 0 0 0 0 0 ; 0 1e+070 0 0 0 0 ; 0 0 1e+070 0 0 0 ; 0 0 0 1e+070 0 0 ; 0 0 0 0 1e+070 0 ; 0 0 0 0 0 1e+070 ];
 GMAT EOTV.CdSigma = 1e+070;
 GMAT EOTV.CrSigma = 1e+070;
@@ -135,7 +138,8 @@ GMAT DefaultProp_ForceModel.ErrorControl = RSSStep;
 GMAT DefaultProp_ForceModel.GravityField.Earth.Degree = 4;
 GMAT DefaultProp_ForceModel.GravityField.Earth.Order = 4;
 GMAT DefaultProp_ForceModel.GravityField.Earth.PotentialFile = 'JGM2.cof';
-GMAT DefaultProp_ForceModel.GravityField.Earth.EarthTideModel = 'None';
+%GMAT DefaultProp_ForceModel.GravityField.Earth.EarthTideModel = 'None';
+GMAT DefaultProp_ForceModel.GravityField.Earth.TideModel = 'None';
 
 %----------------------------------------
 %---------- Propagators

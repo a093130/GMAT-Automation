@@ -14,10 +14,23 @@ Created on Fri Oct 19 14:35:48 2018
     script snippets from external files.  The script creates Include files whose
     parameter and resource values vary in accordance with an Excel workbook.
     
-    A top level GMAT script containing the create statements for GMAT resources and
-    user defined parameters followed by two #Include statements for
-    (1) a file defining the static resources, those that don't change per run, and
-    (2) an include file defining those variables written by "modelgen.py".
+    A top level GMAT script template must exist in the GMAT model directory.
+    This script template will be copied and modified by modelgen.py.
+    The script template must contain the GMAT create statements for GMAT resources.
+      
+    The script template must contain three #Include statements as follows:
+    (1) a GMAT script file defining the static resources, those that don't change per run
+    (2) An include file defining those variables written by "modelgen.py".
+    (3) An include file containing the GMAT Mission Sequence definition.
+    
+    The second #Include statement will be modified by modelgen.py to include a
+    uniquely named filepath and the entire template copied to a "batch" directory
+    as a unique filename.
+    
+    At completion as list of these filenames will be written out as a filename in
+    the GMAT model output_file path.  The model name will be of the form:
+        [Mission Name] + '__RunList_[Julian Date-time] + '.batch'
+    Example: "AlfanoXfer__RunList_J009_0537.25.batch"
     
     Input:
     A dictionary is used to drive the actual resources and parameters written to
@@ -70,6 +83,7 @@ Created on Fri Oct 19 14:35:48 2018
     The top level GMAT script is intended to be called by the GMAT batch facility,
     therefore each variation of Include file 2 must be matched by a uniquely named
     top level GMAT script.
+    
     Each model variation is executed for one or more user-defined Epoch dates, 
     therefore the number of top-level scripts to be generated is the number of 
     configurations in the configuration worksheet times the number of Epochs in the
@@ -79,12 +93,11 @@ Created on Fri Oct 19 14:35:48 2018
     The name shall be of the form:
         'case_''[num HET]'X'[power]'_'[payload mass]'_'[epoch]'_'[inclination]
     
-    modelgen.py should be coded to avoid overwriting and existing model file.
-    The user should move all pre-existing files to a save folder prior to each
-    execution of modelgen.py.
+    modelgen.py is coded to avoid overwriting an existing model file. The current 
+    Julian day and time is suffixed to each filename.
 
     Module "modelgen.py" shall output each top level file as well as a 
-    batchfile list compatible with the GMAT batch specification.
+    list of batch filenames.
     
     Input: 
         An Excel worksheet containing the points of variation
@@ -96,9 +109,24 @@ Created on Fri Oct 19 14:35:48 2018
         A series of uniquely named GMAT top-level model files, one for each line of
         the input workbook.
         A GMAT batch file listing the names of the above model files.
-
+    
+    TODO: the initial baseline depends on the exact spacecraft and hardware
+    created in the top level template.  Four of these represent points of 
+    variation in general:
+        Create Spacecraft EOTV;
+        Create ElectricThruster HET1;
+        Create SolarPowerSystem EOTVSolarArrays;
+        Create ElectricTank RAPTank1;
+    Furthermore, there may be multiple ReportFile creates under various names.
+    These instance dependencies can be avoided by reading and interpreting ModelMissionTemplate.script.
+        
 @Change Log:
     08 Jan 2019, initial baseline
+    09 Jan 2019, Integration branch, ReportFiles are written to 'Report/' directory.
+    10 Jan 2019, NASA did not implement the GMAT batch command.
+    08 Feb 2019, Fix near line 443, include model filename fixed.
+    09 Feb 2019, Fix near lines 249, 288, 300, 307 357: is "ReportFile" 
+        should be "ReportFile1".
        
 """
 import sys
@@ -117,7 +145,9 @@ model_miss_def = 'Include_MissionDefinitions.script'
 
 class GMAT_Particulars:
     """ This class initializes its instance with the script output path taken from
-    the gmat_startup_file.txt
+    the gmat_startup_file.txt.
+    
+    TODO: make this class inherit from gmat_batcher.GMAT_Path
     """
     def __init__(self):
         logging.debug('Instance of class GMAT_Particulars constructed.')
@@ -145,7 +175,7 @@ class GMAT_Particulars:
                         self.output_path = line
                 
         except OSError as err:
-            logging.error("OS error: {0}".format(err))
+            logging.error("OS error: ", err.strerror)
             sys.exit(-1)
         except:
             logging.error("Unexpected error:\n", sys.exc_info())
@@ -213,9 +243,12 @@ class ModelSpec:
         rege_utc = re.compile(' UTC')
         
         for case in self.cases:
-            """ Fix GMAT syntax incompatibilities and inconsistencies. """
-            
-            case['ReportFile.Filename'] = str(case['ReportFile.Filename'])
+            """ Fix GMAT syntax incompatibilities and inconsistencies. 
+            TODO: These edits here defeat the intent of factoring the GMAT
+            resource dictionary into modelpov.py.  Perhaps the value formatting
+            ought to be performed in fromconfigsheet.py using the workbook table headings.
+            """
+            case['ReportFile1.Filename'] = str(case['ReportFile1.Filename'])
             case['EOTV.Epoch'] = str(rege_utc.sub('', case['EOTV.Epoch']))
             case['DefaultOrbitView.ViewPointVector'] = \
                 rege_comma.sub('', repr(case['DefaultOrbitView.ViewPointVector']))
@@ -250,23 +283,29 @@ class ModelWriter:
         payload = self.case['EOTV.Id']
         """ Swap configuration Id (part of ReportFile name) into EOTV.Id.
         GMAT has no resource for payload mass, so EOTV.Id is used to carry it.
+        TODO: use of the GMAT resource name here defeats the intent of factoring
+        them into modelpov.py.  Using the ReportFile name to carry the spacecraft
+        id is a kludge and should be corrected.  Suggest putting the sid into 
+        the workbook on the Mission Parameters tab.
         """
-        sid = self.case['ReportFile.Filename']
+        sid = self.case['ReportFile1.Filename']
         self.case['EOTV.Id'] = sid
         
 
         rege=re.compile(' +')
         """ Eliminate one or more blank characters. """
         
-        self.nameroot = rege.sub('', self.case['ReportFile.Filename'] +\
+        self.nameroot = rege.sub('', self.case['ReportFile1.Filename'] +\
                                  '_' + str(payload) + 'kg' +\
                                  '_' + epoch +\
                                  '_' + str(self.case['EOTV.INC']) +\
                                  '_' + time.strftime('J%j_%H%M%S',time.gmtime()))
         """ Generate unique names for the model file output and the reportfile, 
         something like, '16HET8060W_2000.0kg_20Mar2020_28.5_J004_020337'.
+        TODO: use of the literal 'ReportFile1' defeats the factorization of GMAT
+        Resource names into modelpov.py.
         """       
-        self.reportname = 'ReportFile_'+ self.nameroot + '.csv'
+        self.reportname = 'ReportFile1_'+ self.nameroot + '.csv'
         self.inclname = 'Include_' + self.nameroot + '.script'
 
         p = str(self.out_path)
@@ -282,7 +321,7 @@ class ModelWriter:
         return self.nameroot
     
     def get_reportname(self):
-        """ This is the 'ReportFile.Filename' attribute"""
+        """ This is the 'ReportFile1.Filename' attribute"""
         logging.debug('Method get_reportname() called.')
         
         return self.reportname
@@ -315,14 +354,15 @@ class ModelWriter:
         """ Extract each key:value pair, form GMAT syntax, write it to the outpath. """
         logging.debug('Method xform_write() called.')
         
-        self.reportname = self.get_inclpath() + self.reportname
-        """ GMAT requires an absolute path for the ReportFile output. """
-        
-        self.case['ReportFile.Filename'] = "'" + str(self.reportname) + "'"
+        self.reportname = self.out_path + 'Reports/' + self.reportname
+        """ GMAT requires an absolute path for the ReportFile output. 
+        TODO: Use of the literal 'ReportFile1' defeats the factorization of GMAT
+        Resource names into modelpov.py.
+        """        
+        self.case['ReportFile1.Filename'] = "'" + str(self.reportname) + "'"
         self.case['EOTV.Id'] = "'" + str(self.case['EOTV.Id']) + "'"
         self.case['EOTV.Epoch'] = "'" + str(self.case['EOTV.Epoch']) + "'"
         """ GMAT requires the single quotes around character lines """
-        
         
         writefilename = self.get_inclpath() + self.get_inclname()
         
@@ -335,7 +375,7 @@ class ModelWriter:
                 logging.info('ModelWriter has written include file %s.', writefilename)
                 
         except OSError as err:
-            logging.error("OS error: {0}".format(err))
+            logging.error("OS error: ", err.strerror)
             sys.exit(-1)
         except:
             logging.error("Unexpected error:\n", sys.exc_info())
@@ -392,7 +432,6 @@ if __name__ == "__main__":
             mission_name = 'Batch'
 
         dst = mw.get_inclpath() + mission_name + mw.get_nameroot() + '.script'
-        """ By design, if this script name exists, it will be overwritten. """
         
         static_include = o_path + model_static_res
         mission_include = o_path + model_miss_def
@@ -404,13 +443,17 @@ if __name__ == "__main__":
         
         rege = re.compile('TBR')
         line = ["#Include 'TBR'\n", "#Include 'TBR'\n", "#Include 'TBR'\n"]
+
+#FIX 02/08/2019       
+        incl = mw.get_inclpath() + mw.get_inclname()
         
         try:                  
             with open(dst,'a+') as mmt:   
                 """ Append the #Include macros to the destination filename. """
-                        
                 line[0] = rege.sub(static_include, line[0])                        
-                line[1] = rege.sub(dst, line[1])
+#FIX 02/08/2019
+#               line[1] = rege.sub(dst, line[1])
+                line[1] = rege.sub(incl, line[1])
                 line[2] = rege.sub(mission_include, line[2])
                 """ Order of these includes is important. """
                 
@@ -421,10 +464,10 @@ if __name__ == "__main__":
                         logging.info('Edit completed.')
                         
                     except OSError as err:
-                        logging.error("OS error %s on writing %s.", format(err), edit)
+                        logging.error("OS error %s on writing %s.", err.strerror, edit)
                         sys.exit(-1)
                     except:
-                        logging.error("Unexpected error on write.", sys.exc_info())
+                        logging.error("Unexpected error:\n", sys.exc_info())
                         sys.exit(-1)
                                                                                 
                 batchfile = str(dst) + '\n'
@@ -432,10 +475,10 @@ if __name__ == "__main__":
                 """ GMAT will batch execute a list of the names of top-level models. """
                             
         except OSError as err:
-            logging.error("OS error on open: {0}".format(err))
+            logging.error("OS error: ", err.strerror)
             sys.exit(-1)
         except:
-            logging.error("Unexpected error on open:", sys.exc_info())
+            logging.error("Unexpected error:\n", sys.exc_info())
             sys.exit(-1)
 
     batchfilename = \

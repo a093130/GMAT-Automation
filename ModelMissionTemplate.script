@@ -1,23 +1,44 @@
 %General Mission Analysis Tool(GMAT) Script Template
 %Created: 2019-01-04
-%This file will be copied, edited and renamed by  
-%	python GMAT Automation scripts. Refer to modelgen.py.
-%It is the top-level model definition.
-%Resource definitions are added to the model via #Include macro.  
-%Static definitions, that is those which are not points of variation
-%	for the model, have been moved to the Include_StaticDefinitions file.
-%The Mission Sequence and all user defined Arrays, Variables, Strings 
-%	are also added to the model via #Include macro. The Mission Sequence
-%	is defined in Include_MissionDefinitions.script.
-%Note that this file and its include files are intended to be
-%	batch executed from the GMAT command line.  The GMAT GUI cannot
-%	be used to edit this file.
-%Any changes made in the GUI should be copied from a combined model file
-%	to the corresponding definition in the batch system.  Note that if this
-% is done, the GMAT Automation script (modelgen.py) must be rerun.
-%It is important that this top-level file be kept small, because modelgen.py
-%	may copy it hundreds of times.  The Include_StaticDefinitions.script is 
-%	not copied, it's name must remain static as are the definitions within it.
+%
+%ModelMissionTemplate.script is the top-level model definition in the batch system.
+%It will be copied, and renamed for each unique instance of a mission by modelgen.py.
+%
+%The mission and spacecraft configuration is read from an Excel workbook by modelgen.py,
+%which creates and saves a mission specific include file in the Batch directory.
+%
+%Each generated include file is uniquely named with configuration, epoch, Julian day and 
+%time of generation, and each filename is prefixed with the string "Include_".
+%
+%The modelgen.py script appends an #Include macro referencing the created include file to  
+%the copy of ModelMissionTemplate.script. Two other invariable #Include macros are also 
+% appended to ModelMissionTemplate.script:
+%	Include_MissionDefinitions.script
+%	Include_StaticDefinitions.script
+%
+%The appended copy of ModelMissionTemplate.script is saved in the Batch directory.
+%
+%It is important that ModelMissionTemplate.script be kept small, because modelgen.py
+%may copy it hundreds of times. This is why the bulk of the Resource definitions are  
+%factored into the invariable macro, Include_StaticDefinitions.script.
+% 
+%The invariable macros are not edited by modelgen.py, they must be maintained by
+%the user.
+%
+%ModelMissionTemplate.script and its include files are intended to be
+%executed from the GMAT command line.  The GMAT GUI cannot be used to edit these files.
+%
+%Instead, create a new model, proceed with design and test using the GMAT GUI.
+%The model created (or changed) in the GUI should be factored and copied from the
+%GUI generated model file to the batch template files located in
+%the GMAT "OUTPUT_PATH" (OUTPUT_PATH is defined in gmat_startup_file.txt):
+%	Include_MissionDefinitions.script
+%	Include_StaticDefinitions.script
+%	ModelMissionTemplate.script
+%	
+%Update the configuration workbook any time spacecraft or its hardware is changed, likewise
+%the ModelMissionTemplate.script.  Rerun modelgen.py following update of the workbook.
+%
 
 Create Spacecraft EOTV;
 Create ElectricThruster HET1;
