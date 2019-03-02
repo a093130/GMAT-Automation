@@ -31,17 +31,17 @@ GMAT EOTV.DateFormat = UTCGregorian;
 %GMAT EOTV.Epoch = '30 Dec 2020 23:59:28.000';
 GMAT EOTV.CoordinateSystem = EarthMJ2000Eq;
 GMAT EOTV.DisplayStateType = Keplerian;
-GMAT EOTV.SMA = 6578.136000000018;
-GMAT EOTV.ECC = 0.02454974900597826;
-%GMAT EOTV.INC = 28.50000000000004;
-GMAT EOTV.RAAN = 306.6148021947984;
-GMAT EOTV.AOP = 314.1905515359986;
-GMAT EOTV.TA = 99.88774933204506;
-%GMAT EOTV.DryMass = 1024.5;
-GMAT EOTV.Cd = 2.2;
+GMAT EOTV.SMA = 6878.13600000003;
+GMAT EOTV.ECC = 0.009999999999999312;
+%GMAT EOTV.INC = 28.5;
+GMAT EOTV.RAAN = 360;
+GMAT EOTV.AOP = 180;
+GMAT EOTV.TA = 90.00000000000765;
+%GMAT EOTV.DryMass = 30123.93;
+GMAT EOTV.Cd = 4;
 GMAT EOTV.Cr = 1.8;
-GMAT EOTV.DragArea = 15;
-GMAT EOTV.SRPArea = 1;
+GMAT EOTV.DragArea = 114;
+GMAT EOTV.SRPArea = 1730;
 GMAT EOTV.Tanks = {RAPTank1};
 GMAT EOTV.Thrusters = {HET1};
 GMAT EOTV.PowerSystem = EOTVSolarArrays;
@@ -121,7 +121,7 @@ GMAT EOTVSolarArrays.SolarCoeff4 = 0.10843;
 GMAT EOTVSolarArrays.SolarCoeff5 = -0.01279;
 
 %Create ElectricTank RAPTank1;
-GMAT RAPTank1.AllowNegativeFuelMass = false;
+GMAT RAPTank1.AllowNegativeFuelMass = true;
 %GMAT RAPTank1.FuelMass = 2600;
 
 %----------------------------------------
@@ -132,14 +132,28 @@ GMAT RAPTank1.AllowNegativeFuelMass = false;
 GMAT DefaultProp_ForceModel.CentralBody = Earth;
 GMAT DefaultProp_ForceModel.PrimaryBodies = {Earth};
 GMAT DefaultProp_ForceModel.Drag = None;
-GMAT DefaultProp_ForceModel.SRP = Off;
+GMAT DefaultProp_ForceModel.SRP = On;
 GMAT DefaultProp_ForceModel.RelativisticCorrection = Off;
 GMAT DefaultProp_ForceModel.ErrorControl = RSSStep;
 GMAT DefaultProp_ForceModel.GravityField.Earth.Degree = 4;
 GMAT DefaultProp_ForceModel.GravityField.Earth.Order = 4;
 GMAT DefaultProp_ForceModel.GravityField.Earth.PotentialFile = 'JGM2.cof';
 %GMAT DefaultProp_ForceModel.GravityField.Earth.EarthTideModel = 'None';
-GMAT DefaultProp_ForceModel.GravityField.Earth.TideModel = 'None';
+GMAT DefaultProp_ForceModel.SRP.Flux = 1367;
+GMAT DefaultProp_ForceModel.SRP.SRPModel = Spherical;
+GMAT DefaultProp_ForceModel.SRP.Nominal_Sun = 149597870.691;
+
+%Create ForceModel TrimPropagator_ForceModel;
+GMAT TrimPropagator_ForceModel.CentralBody = Earth;
+GMAT TrimPropagator_ForceModel.PrimaryBodies = {Earth};
+GMAT TrimPropagator_ForceModel.Drag = None;
+GMAT TrimPropagator_ForceModel.SRP = Off;
+GMAT TrimPropagator_ForceModel.RelativisticCorrection = Off;
+GMAT TrimPropagator_ForceModel.ErrorControl = RSSStep;
+GMAT TrimPropagator_ForceModel.GravityField.Earth.Degree = 4;
+GMAT TrimPropagator_ForceModel.GravityField.Earth.Order = 4;
+GMAT TrimPropagator_ForceModel.GravityField.Earth.PotentialFile = 'JGM2.cof';
+GMAT TrimPropagator_ForceModel.GravityField.Earth.EarthTideModel = 'None';
 
 %----------------------------------------
 %---------- Propagators
@@ -148,20 +162,30 @@ GMAT DefaultProp_ForceModel.GravityField.Earth.TideModel = 'None';
 %Create Propagator DefaultProp;
 GMAT DefaultProp.FM = DefaultProp_ForceModel;
 GMAT DefaultProp.Type = PrinceDormand78;
-GMAT DefaultProp.InitialStepSize = 60;
-GMAT DefaultProp.Accuracy = 9.999999999999999e-012;
+GMAT DefaultProp.InitialStepSize = 30;
+GMAT DefaultProp.Accuracy = 1e-007;
 GMAT DefaultProp.MinStep = 0.001;
-GMAT DefaultProp.MaxStep = 300;
+GMAT DefaultProp.MaxStep = 3000;
 GMAT DefaultProp.MaxStepAttempts = 1450;
 GMAT DefaultProp.StopIfAccuracyIsViolated = true;
+
+%Create Propagator TrimPropagator;
+GMAT TrimPropagator.FM = TrimPropagator_ForceModel;
+GMAT TrimPropagator.Type = PrinceDormand78;
+GMAT TrimPropagator.InitialStepSize = 60;
+GMAT TrimPropagator.Accuracy = 9.999999999999999e-012;
+GMAT TrimPropagator.MinStep = 0.001;
+GMAT TrimPropagator.MaxStep = 3000;
+GMAT TrimPropagator.MaxStepAttempts = 1450;
+GMAT TrimPropagator.StopIfAccuracyIsViolated = true;
 
 %----------------------------------------
 %---------- Burns
 %----------------------------------------
 
-%Create FiniteBurn DefaultFB;
-GMAT DefaultFB.Thrusters = {HET1};
-GMAT DefaultFB.ThrottleLogicAlgorithm = 'MaxNumberOfThrusters';
+%Create FiniteBurn ContinuousThrust;
+GMAT ContinuousThrust.Thrusters = {HET1};
+GMAT ContinuousThrust.ThrottleLogicAlgorithm = 'MaxNumberOfThrusters';
 
 %----------------------------------------
 %---------- Subscribers
