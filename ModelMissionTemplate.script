@@ -45,8 +45,10 @@ Create ElectricThruster HET1;
 Create SolarPowerSystem EOTVSolarArrays;
 Create ElectricTank RAPTank1;
 Create ForceModel DefaultProp_ForceModel;
+Create ForceModel TrimPropagator_ForceModel;
 Create Propagator DefaultProp;
-Create FiniteBurn DefaultFB;
+Create Propagator TrimPropagator;
+Create FiniteBurn ContinuousThrust;
 Create OrbitView DefaultOrbitView;
 Create ReportFile ReportFile1;
 
