@@ -24,16 +24,18 @@ Created on Wed Feb  6 19:17:02 2019
 import os
 import sys
 import re
-#import shlex
 import platform
 import logging
 import traceback
-#import tempfile
-#import threading as task
 import getpass
 from pathlib import Path
 import subprocess as sp
-import multiprocessing as mp
+from multiprocessing import Pool
+from multiprocessing import Queue
+from multiprocessing import current_process
+from multiprocessing import cpu_count
+from multiprocessing import active_children
+from multiprocessing import Full
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
 
 cpto = 300
@@ -42,17 +44,16 @@ rsrv_cpus = 2
 """ Child process timeout = 10 minutes: more than sufficient on dual 2.13GHz E5506 XEON, 
 16 Gbyte workstation with GTX 750 GPU 
 """
-#def parasite(proc):
-#    """ Read stdout from the proc and write lines to given file """
-#    with open ("c:\\temp\\gmat_stdout.log",'+a') as fout:
-#        for line in iter(proc.stdout.readline, b''):
-#            fout.write('got line: {0}'.format(line.decode('utf-8')))
 
 def run_gmat(gmat_arg):
-    msg[0] = "Running GMAT with File: " + str(gmat_arg)
-    msg[1] = ""
+    """ wrapper to allow multiprocess.Pool to parallelize the executtion of GMAT
+    the input argument is a list as follows:
+        gmat_arg[0] is the GMAT script file path,
+        gmat_arg[1] is the output queue connecting the child process to the main process.
+    """
+    msg = list("")
     
-    proc = sp.Popen(['gmat', '-m', '-ns', '-x', '-r', str(gmat_arg)], stdout=sp.PIPE, stderr=sp.STDOUT)   
+    proc = sp.Popen(['gmat', '-m', '-ns', '-x', '-r', str(gmat_arg[0])], stdout=sp.PIPE, stderr=sp.STDOUT)   
     """ Run GMAT for batch file path names as gmat_args.
     GMAT Arguments:
     -m: Start GMAT with a minimized interface.
@@ -70,20 +71,55 @@ def run_gmat(gmat_arg):
         """
         (outs, errors) = proc.communicate(cpto)
         """Timeout in cpto seconds if process does not complete."""
+        msg[0] = "Child process " + str(proc.pid) + " ran GMAT file " + str(gmat_arg[0]) + ".\n"
+        
+        if outs.len > 1:
+            gmat_arg[1].put("Child process: " + str(current_process()) + "worker/" \
+                    + str(proc.pid) + "sp (GMAT):\n" + str(outs) + "\n")
+        
+        if errors.len > 1:
+            msg[0].append("GMAT child process: " + str(current_process()) + "worker/" \
+                    + str(proc.pid) + "sp (GMAT):\n" + str(errors) + "\n")
+            gmat_arg[1].put_nowait(msg[0])
+        
+    except Full as e:
+        msg[1] += "Queue full " + str(current_process()) + "worker/" \
+        + str(proc.pid) + "sp .\n"
         
     except sp.TimeoutExpired as e:
         """ This function is meant to be called in the multiprocess context.  Logging
         threads are dangerous, because the thread context from the parent process is not passed
         to the child process.  Logging must be done in the parent process.
         """
-        msg[1] += "GMAT timed out in child process " + str(proc.pid) + "."
+        msg[1] += "GMAT timed out in child process " + str(current_process()) + "worker/" \
+        + str(proc.pid) + "sp .\n"
+                    
+    except ValueError as e:
+        msg[1] += "Child process " + str(current_process()) + "worker/" \
+        + str(proc.pid) + "sp called with incorrect arguments: " + e.args + ".\n"
         
-        proc.kill()
-        """ The child process is not killed by the system, so clean it up here."""
-        (outs, errors) = proc.communicate()
-        """ And the stdout buffer must be flushed. """
-            
+    except AttributeError as e:
+#        tb = sys.exc_info()      
+        lines = traceback.format_exc().splitlines()
+        msg[1] += "Child process " + str(proc.pid) + "Cause: " + e.__doc__ + "Context: " + e.__cause__ + "Traceback:\n"
+        msg[1] += lines[0] + lines[-1] + "\n"
+
+    except sp.CalledProcessError as e:       
+        msg[1] += "Child process " + str(proc.pid) + "GMAT error code, " + e.returncode + " returned."
+        msg[1] += "\nError is: " + e.stderr + "\n"  
+    
+    except sp.SubprocessError as e:
+        msg[1] += "Child process " + str(proc.pid) + "Popen generic child process error, " + e.args + ".\n"
+        
     finally:
+        gmat_arg[1].close()
+        """ Signal the main process this child will put no more data on the queue. """
+        proc.kill()
+        """ The child process is not killed by subprocess, so clean it up here."""
+        (outs, errors) = proc.communicate()
+        """ And the stdout buffer must be flushed. Throw it in the bit bucket.
+        We don't want any more exceptions.
+        """        
         return(msg)
     
 class GMAT_Path:
@@ -152,10 +188,12 @@ if __name__ == "__main__":
     logging.info('Batch file is %s', fname[0])
     
     gmat_arg = ()
-    gmat_args = list()
-    ncpus = mp.cpu_count()
+    worker_args = list()
+    ncpus = cpu_count()
     nrunp = ncpus - rsrv_cpus
-    ninstances = 4
+#    ninstances = 4
+    ninstances = 1
+    task_queue = Queue()
     
     try:
         with open(fname[0]) as f:
@@ -169,31 +207,24 @@ if __name__ == "__main__":
                 logging.debug("Path to scriptfile is %s", gmat_arg)
                 scriptname = os.path.basename(filename)
                 
-                gmat_args.append(gmat_arg)
+                worker_args.append(gmat_arg, task_queue)
                                       
-        with mp.Pool(processes=nrunp, maxtasksperchild=20 ) as workers:
-            results_iter = workers.imap(run_gmat, gmat_args, ninstances)
-                
-        for msg in results_iter:
-            logging.info(msg[0])
-            if msg[1].len > 0:
-                logging.error(msg[1])
+        with Pool(processes=nrunp, maxtasksperchild=20) as workers:
+            """ In the single process execution of GMAT it was found that the process would
+            timeout after a max of 20 processes.
+            """
             
-    except sp.CalledProcessError as e:       
-        msg[1] += "GMAT error code, " + e.returncode + " returned."
-        msg[1] += "\nError is: " + e.stderr    
-    
-    except sp.SubprocessError as e:
-        msg[1] += "Popen generic child process error, " + e.args + "."
+            results_iter = workers.imap(run_gmat, worker_args, ninstances)
         
-    except ValueError as e:
-        msg[1] += "Subprocess called with incorrect arguments: " + e.args + "."
-        
-    except AttributeError as e:
-#        tb = sys.exc_info()      
-        lines = traceback.format_exc().splitlines()
-        msg[1] += "Cause: " + e.__doc__ + "Context: " + e.__cause__ + "Traceback:\n"
-        msg[1] += lines[0] + lines[-1]
+        while active_children().len > 0:
+            """ Note that active_children() has the side effect of joining the process. """
+            logging.info("Output from task queue:\n%s", repr(task_queue.get()))
+
+        for msg in results_iter:
+            if msg[0].len > 0:
+                logging.info(msg[0])           
+            if msg[1].len > 0:
+                logging.error(msg[1])           
 
     except OSError as e:
         logging.error("OS error: %s for filename %s", e.strerror, e.filename)
@@ -207,6 +238,8 @@ if __name__ == "__main__":
         logging.error("Unknown error:\n%s", sys.exc_info())
             
     finally:
+        obj = task_queue.get()
+        """ child processes will not terminate until the queue is read """
         workers.close()
         workers.join()
         logging.info('******************** GMAT Batch Execution Completed ********************')
