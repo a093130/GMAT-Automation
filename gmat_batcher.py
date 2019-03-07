@@ -22,7 +22,7 @@ Created on Wed Feb  6 19:17:02 2019
 """
 
 import os
-import sys
+#import sys
 import re
 import platform
 import logging
@@ -31,11 +31,10 @@ import getpass
 from pathlib import Path
 import subprocess as sp
 from multiprocessing import Pool
-from multiprocessing import Queue
-from multiprocessing import current_process
+#from multiprocessing import Queue
+#from multiprocessing import current_process
 from multiprocessing import cpu_count
-from multiprocessing import active_children
-from multiprocessing import Full
+from multiprocessing import Manager
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
 
 cpto = 300
@@ -45,82 +44,67 @@ rsrv_cpus = 2
 16 Gbyte workstation with GTX 750 GPU 
 """
 
-def run_gmat(gmat_arg):
+def run_in_pool(args):
+    """ A diagnostic function and example of managed queue use. """
+    q = args[1]
+    scriptname = os.path.basename(args[0])
+    q.put("Processing file: %s" % scriptname)
+    q.put("Completed file: %s" % scriptname)
+
+    
+def run_gmat(args):
     """ wrapper to allow multiprocess.Pool to parallelize the executtion of GMAT
     the input argument is a list as follows:
         gmat_arg[0] is the GMAT script file path,
         gmat_arg[1] is the output queue connecting the child process to the main process.
     """
-    msg = list("")
+    q = args[1]
+    scriptname = os.path.basename(args[0])
     
-    proc = sp.Popen(['gmat', '-m', '-ns', '-x', '-r', str(gmat_arg[0])], stdout=sp.PIPE, stderr=sp.STDOUT)   
-    """ Run GMAT for batch file path names as gmat_args.
-    GMAT Arguments:
-    -m: Start GMAT with a minimized interface.
-    -ns: Start GMAT without the splash screen showing.
-    -x: Exit GMAT after running the specified script.
-    -r: Automatically run the specified script after loading.
-    """
+    q.put("********** Running GMAT for file: {0} **********".format(scriptname))
+    
     try:
+        proc = sp.Popen(['gmat', '-m', '-ns', '-x', '-r', str(args[0])], stdout=sp.PIPE, stderr=sp.STDOUT)   
+        """ Run GMAT for batch file path names as gmat_args.
+        GMAT Arguments:
+        -m: Start GMAT with a minimized interface.
+        -ns: Start GMAT without the splash screen showing.
+        -x: Exit GMAT after running the specified script.
+        -r: Automatically run the specified script after loading.
+        """
+        
+        (outs, errors) = proc.communicate(timeout=cpto)
         """ The buffer passed to Popen() defaults to io.DEFAULT_BUFFER_SIZE, usually 62526 bytes.
         If this is exceeded, the child process hangs with write pending for the buffer to be read.
         https://thraxil.org/users/anders/posts/2008/03/13/Subprocess-Hanging-PIPE-is-your-enemy/
-        This try block will attempt to maintain the buffer by reading it frequently, otherwise the timeout
-        value should be long enough for GMAT to complete, the TimeoutExpired exeception allows 
-        processing to continue under this assumption.
+        
+        Attempt to maintain the buffer by reading it frequently, the timeout
+        value should be long enough for GMAT to complete.  Check the GTMAT output from 
+        communicate() to be certain.
         """
-        (outs, errors) = proc.communicate(cpto)
-        """Timeout in cpto seconds if process does not complete."""
-        msg[0] = "Child process " + str(proc.pid) + " ran GMAT file " + str(gmat_arg[0]) + ".\n"
-        
-        if outs.len > 1:
-            gmat_arg[1].put("Child process: " + str(current_process()) + "worker/" \
-                    + str(proc.pid) + "sp (GMAT):\n" + str(outs) + "\n")
-        
-        if errors.len > 1:
-            msg[0].append("GMAT child process: " + str(current_process()) + "worker/" \
-                    + str(proc.pid) + "sp (GMAT):\n" + str(errors) + "\n")
-            gmat_arg[1].put_nowait(msg[0])
-        
-    except Full as e:
-        msg[1] += "Queue full " + str(current_process()) + "worker/" \
-        + str(proc.pid) + "sp .\n"
-        
+        q.put("GMAT: %s" % (outs).decode('UTF-8'))
+        """ communicate() returns a sequence of bytes encoding a literal string. """
+                              
     except sp.TimeoutExpired as e:
         """ This function is meant to be called in the multiprocess context.  Logging
         threads are dangerous, because the thread context from the parent process is not passed
         to the child process.  Logging must be done in the parent process.
         """
-        msg[1] += "GMAT timed out in child process " + str(current_process()) + "worker/" \
-        + str(proc.pid) + "sp .\n"
+        q.put("GMAT: Timeout Expired, File: %s" % scriptname)
                     
-    except ValueError as e:
-        msg[1] += "Child process " + str(current_process()) + "worker/" \
-        + str(proc.pid) + "sp called with incorrect arguments: " + e.args + ".\n"
-        
-    except AttributeError as e:
-#        tb = sys.exc_info()      
-        lines = traceback.format_exc().splitlines()
-        msg[1] += "Child process " + str(proc.pid) + "Cause: " + e.__doc__ + "Context: " + e.__cause__ + "Traceback:\n"
-        msg[1] += lines[0] + lines[-1] + "\n"
-
     except sp.CalledProcessError as e:       
-        msg[1] += "Child process " + str(proc.pid) + "GMAT error code, " + e.returncode + " returned."
-        msg[1] += "\nError is: " + e.stderr + "\n"  
+        q.put("GMAT: Called ProcessError, File: %s" % scriptname)  
     
     except sp.SubprocessError as e:
-        msg[1] += "Child process " + str(proc.pid) + "Popen generic child process error, " + e.args + ".\n"
+        q.put("GMAT: Subprocess Error, File: %s" % scriptname)
         
     finally:
-        gmat_arg[1].close()
-        """ Signal the main process this child will put no more data on the queue. """
         proc.kill()
         """ The child process is not killed by subprocess, so clean it up here."""
         (outs, errors) = proc.communicate()
-        """ And the stdout buffer must be flushed. Throw it in the bit bucket.
-        We don't want any more exceptions.
-        """        
-        return(msg)
+        """ And the stdout buffer must be flushed. """
+        
+        q.put("********** GMAT: completed file: {0} ***********\n".format(scriptname))
     
 class GMAT_Path:
     """ This class initializes its instance with the GMAT root path using the 
@@ -171,7 +155,7 @@ if __name__ == "__main__":
             level=logging.INFO,
             format='%(asctime)s %(filename)s %(levelname)s:\n%(message)s', datefmt='%d%B%Y_%H:%M:%S')
 
-    logging.info('******************** GMAT Batch Execution Started ********************')
+    logging.info("!!!!!!!!!! GMAT Batch Execution Started !!!!!!!!!!")
     host_attr = platform.uname()
     logging.info('User Id: %s\nNetwork Node: %s\nSystem: %s, %s, \nProcessor: %s', \
                  getpass.getuser(), \
@@ -188,12 +172,15 @@ if __name__ == "__main__":
     logging.info('Batch file is %s', fname[0])
     
     gmat_arg = ()
-    worker_args = list()
+    gmat_args = list()
     ncpus = cpu_count()
     nrunp = ncpus - rsrv_cpus
-#    ninstances = 4
-    ninstances = 1
-    task_queue = Queue()
+    ninstances = 4
+#    ninstances = 1
+    nmsg = 0
+    
+    mgr = Manager()
+    task_queue = mgr.Queue()
     
     try:
         with open(fname[0]) as f:
@@ -207,42 +194,41 @@ if __name__ == "__main__":
                 logging.debug("Path to scriptfile is %s", gmat_arg)
                 scriptname = os.path.basename(filename)
                 
-                worker_args.append(gmat_arg, task_queue)
+                gmat_args.append([gmat_arg, task_queue])
                                       
-        with Pool(processes=nrunp, maxtasksperchild=20) as workers:
-            """ In the single process execution of GMAT it was found that the process would
-            timeout after a max of 20 processes.
-            """
-            
-            results_iter = workers.imap(run_gmat, worker_args, ninstances)
+        pool = Pool(processes=nrunp, maxtasksperchild=20)
+        """ In the single process execution of GMAT it was found that the process would
+        timeout after a max of 20 processes.
+        """
+        results = pool.map(run_gmat, gmat_args, chunksize=ninstances)
         
-        while active_children().len > 0:
-            """ Note that active_children() has the side effect of joining the process. """
-            logging.info("Output from task queue:\n%s", repr(task_queue.get()))
+        while 1:
+            qout = task_queue.get(cpto)
+            logging.info(qout)
+            if task_queue.qsize() < 1:
+                break
 
-        for msg in results_iter:
-            if msg[0].len > 0:
-                logging.info(msg[0])           
-            if msg[1].len > 0:
-                logging.error(msg[1])           
-
+    except RuntimeError as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error("RuntimeError: %s\n%s", lines[0], lines[-1])
+        
+    except ValueError as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error("ValueError: %s\n%s", lines[0], lines[-1])
+        
+    except AttributeError as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error("Attribute Error: %s\n%s", lines[0], lines[-1])
+        
     except OSError as e:
         logging.error("OS error: %s for filename %s", e.strerror, e.filename)
 
     except Exception as e:
-#        tb = sys.exc_info()
         lines = traceback.format_exc().splitlines()
-        logging.error('%s Cause: %s, Context: %s\n%s%s', e.__doc__,  e.__cause__, e.__context__, lines[0], lines[-1])
-                
-    except:
-        logging.error("Unknown error:\n%s", sys.exc_info())
-            
+        logging.error("Exception: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+                            
     finally:
-        obj = task_queue.get()
-        """ child processes will not terminate until the queue is read """
-        workers.close()
-        workers.join()
-        logging.info('******************** GMAT Batch Execution Completed ********************')
+        logging.info("!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!")
             
             
             
