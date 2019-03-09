@@ -22,50 +22,50 @@ Created on Wed Feb  6 19:17:02 2019
 """
 
 import os
-#import sys
+import time
 import re
 import platform
 import logging
 import traceback
 import getpass
+import random
 from pathlib import Path
 import subprocess as sp
 from multiprocessing import Pool
-#from multiprocessing import Queue
-#from multiprocessing import current_process
 from multiprocessing import cpu_count
 from multiprocessing import Manager
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
 
 cpto = 300
-rsrv_cpus = 2
-
-""" Child process timeout = 10 minutes: more than sufficient on dual 2.13GHz E5506 XEON, 
+""" Child process timeout = 5 minutes: more than sufficient on dual 2.13GHz E5506 XEON, 
 16 Gbyte workstation with GTX 750 GPU 
 """
+rsrv_cpus = 2
+""" Reserve 2 cores for system processes and services (daemons). Spikes on process context swap. """
 
-def run_in_pool(args):
-    """ A diagnostic function and example of managed queue use. """
-    q = args[1]
-    scriptname = os.path.basename(args[0])
-    q.put("Processing file: %s" % scriptname)
-    q.put("Completed file: %s" % scriptname)
 
+
+def delay_run():
+    """ Helper to randomize start of child processes. Minimizes GMAT log file collisions. """
+    numerator = random.randrange(1,6,1)
+    denominator = random.randrange(7,12,1)
+    delay = round(numerator/denominator,3)
+    time.sleep(delay)
     
 def run_gmat(args):
-    """ wrapper to allow multiprocess.Pool to parallelize the executtion of GMAT
-    the input argument is a list as follows:
+    """ GMAT wrapper to allow multiprocess.Pool to parallelize the executtion of GMAT.
+    Input arguments are contained in a list as follows:
         gmat_arg[0] is the GMAT script file path,
-        gmat_arg[1] is the output queue connecting the child process to the main process.
+        gmat_arg[1] is the managed output queue connecting the child process to the main process.
     """
+    delay_run()
+    
     q = args[1]
     scriptname = os.path.basename(args[0])
-    
-    q.put("********** Running GMAT for file: {0} **********".format(scriptname))
-    
+        
     try:
         proc = sp.Popen(['gmat', '-m', '-ns', '-x', '-r', str(args[0])], stdout=sp.PIPE, stderr=sp.STDOUT)   
-        """ Run GMAT for batch file path names as gmat_args.
+        """ Run GMAT for path names passed as args[0].
         GMAT Arguments:
         -m: Start GMAT with a minimized interface.
         -ns: Start GMAT without the splash screen showing.
@@ -82,8 +82,8 @@ def run_gmat(args):
         value should be long enough for GMAT to complete.  Check the GTMAT output from 
         communicate() to be certain.
         """
-        q.put("GMAT: %s" % (outs).decode('UTF-8'))
-        """ communicate() returns a sequence of bytes encoding a literal string. """
+        outs = outs.decode('UTF-8')
+        q.put(filter_outs(outs, scriptname))
                               
     except sp.TimeoutExpired as e:
         """ This function is meant to be called in the multiprocess context.  Logging
@@ -98,14 +98,36 @@ def run_gmat(args):
     except sp.SubprocessError as e:
         q.put("GMAT: Subprocess Error, File: %s" % scriptname)
         
+    except Exception as e:
+        q.put("GMAT: Unanticipated Exception " + e.__doc__ + ", File: " + scriptname)
+        
     finally:
         proc.kill()
         """ The child process is not killed by subprocess, so clean it up here."""
         (outs, errors) = proc.communicate()
         """ And the stdout buffer must be flushed. """
         
-        q.put("********** GMAT: completed file: {0} ***********\n".format(scriptname))
+        q.put("********** GMAT completed mission run for file: {0} ***********".format(scriptname))
+
+ 
+def filter_outs(outs:str, id:str):
+    """ Reduce the logging size of the gmat output message.
     
+    Parameters:
+        UTF-8 decoded message
+        id string, recommend the scriptname for id, but could be the PID.
+    """
+    loglines = outs.split()
+    loglines = loglines[-20:]
+    
+    outs = " ".join(loglines)
+    loglines = id + "\n" + outs
+    
+    rege = re.compile("====")
+    loglines = rege.sub("", loglines)
+    
+    return loglines
+
 class GMAT_Path:
     """ This class initializes its instance with the GMAT root path using the 
     'LOCALAPPDATA' environment variable.  Current version is Windows specific.
@@ -175,8 +197,8 @@ if __name__ == "__main__":
     gmat_args = list()
     ncpus = cpu_count()
     nrunp = ncpus - rsrv_cpus
-    ninstances = 4
-#    ninstances = 1
+#    ninstances = 4
+    ninstances = 1
     nmsg = 0
     
     mgr = Manager()
@@ -204,10 +226,12 @@ if __name__ == "__main__":
         
         while 1:
             qout = task_queue.get(cpto)
+            
             logging.info(qout)
+            
             if task_queue.qsize() < 1:
                 break
-
+        
     except RuntimeError as e:
         lines = traceback.format_exc().splitlines()
         logging.error("RuntimeError: %s\n%s", lines[0], lines[-1])
@@ -228,7 +252,8 @@ if __name__ == "__main__":
         logging.error("Exception: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
                             
     finally:
-        logging.info("!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!")
+        pool.close()
+        logging.info("!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!\n\n")
             
             
             

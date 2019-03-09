@@ -33,6 +33,8 @@ GMAT AOL_LAST = EOTV.TA + EOTV.AOP;
 GMAT INITIAL_FUEL = EOTV.RAPTank1.FuelMass;
 GMAT INC_INIT = EOTV.INC;
 
+% Propagate out to around 2000km to reduce effects of eclipse or to higher altitude orbit.
+
 BeginFiniteBurn 'BeginAlfanoBurn' ContinuousThrust(EOTV);
 While EOTV.SMA <= 42159
    % Argument of Latitude is used to fix the thrust application relative to the ECEF Frame
@@ -40,6 +42,7 @@ While EOTV.SMA <= 42159
    If AOL > 360.00
 	  AOL = AOL - 360.00
    EndIf
+   
    GMAT DELTA_AOL = AOL - AOL_LAST;
    
    If DELTA_AOL < 0
@@ -67,5 +70,3 @@ EndFiniteBurn 'EndAlfanoBurn' ContinuousThrust(EOTV);
 
 % We should also trim the eccentricity if > 0.02
 
-Write EOTV.ElapsedDays { Style = Script, LogFile = true, MessageWindow = true }
-Write REV { Style = Script, LogFile = true, MessageWindow = true }
