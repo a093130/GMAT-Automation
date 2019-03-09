@@ -51,12 +51,13 @@ Created on Sat Nov 17 09:49:45 2018
           the configuration, the Starting Epoch and the Inclination
 @Change Log:
     15 Nov 2018, baseline set of model resources supporting paper AIAA-2018-4718
+    09 Feb 2019, Integration, Fix ReportFile parameter, should be "ReportFile1".
     
 """
 def getvarnames():
     """ return dictionary of GMAT resource name by configspec variable name. """
     var2gmat = dict([
-                       ('ReportFile.Filename', 'Configuration'),
+                       ('ReportFile1.Filename', 'Configuration'),
                        ('EOTV.Id', 'Payload' ),
                        ('EOTV.DryMass','Dry Mass'),
                        ('HET1.MaximumUsablePower', 'Max Thrust Power'),

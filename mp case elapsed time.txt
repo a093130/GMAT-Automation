@@ -1,0 +1,10 @@
+06March2019_21:18:31 gmat_batcher.py INFO:!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!
+06March2019_20:49:55 gmat_batcher.py INFO:!!!!!!!!!! GMAT Batch Execution Started !!!!!!!!!!
+for map, chunksize =1
+elapsed time: 28:36
+
+06March2019_22:08:18 gmat_batcher.py INFO:!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!
+06March2019_21:37:10 gmat_batcher.py INFO:!!!!!!!!!! GMAT Batch Execution Started !!!!!!!!!!
+
+for map, chunksize = 4
+elapsed timeL 31:08

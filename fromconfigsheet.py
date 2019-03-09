@@ -9,20 +9,34 @@ Created on Sat Oct 20 09:53:28 2018
     and returns a corresponding specification of various cases of GMAT model resources.
     
     Interface Agreement:
-    A table consisting of a first line of parameter names and successive lines of
-    configuration values is contiguous in a sheet named "GMAT" of an Excel workbook, 
-    starting in cell A1. 
+    An Excel workbook exists which contains a sheet named "GMAT" having a
+    contiguous table starting in cell "A1".  The table consists of a first line
+    of parameter names and successive lines of spacecraft properties and 
+    relevant hardware configuration.
     
-    The inclination cases to be executed are gleaned from nx1 table of values
-    in named range, "Inclinations" on a sheet named "Mission Params".
+    The first line of table headings may not be exactly the same as GMAT resource names.  
+    The associated routine, "modelpov.py" defines a mapping of required GMAT
+    resource names to worksheet table headings, which we refer to as parameter names.  
+    Procedure modelgen.py will use this association to generate the correct 
+    GMAT resource names.  Procedure fromconfigsheet.py will extract only the parameter 
+    names defined in modelpov.py. Note that it is possible with this logic to extract NO
+    data from the workbook, in this case the model.pov file may be edited to include
+    the intended parameter names, or the workbook may be so edited.
     
-    The Starting Epoch cases to be executed are gleaned from nx4 table of values
-    in named range, "Inclinations" on a sheet named "Mission Params". Each row, n,
-    contains a UTC time and date value in column 1 and a viewpoint vector consisting
-    of 3 components (x,y,z km) of camera position for rendering. 
+    Variation of orbital elements is independent of hardware configuration.  Specifically,
+    inclination cases may be multiple for the given "GMAT" table and are gleaned from
+    a separate n x 1 table of values in named range, "Inclinations" contained in
+    a sheet named "Mission Params".
     
-    The associated routine, "modelpov.py" defines a mapping of required model
-    resource names to worksheet table names.
+    Similarly, cases of initial epoch to be executed are gleaned from n x 4 table of values
+    in named range, "Starting Epoch" on a sheet named "Mission Params". Each row, n,
+    contains a UTC formatted time and date value in column 1, e.g. 
+    "20 Mar 2020 03:49:00.000 UTC".
+
+    For display, a GMAT viewpoint vector consisting of x, y, and z components of
+    rendering camera position (in the J2000 ECI coordinate system) are associated
+    with each epoch value, and are contained in columns (n,2), (n,3), and (n,4) of
+    the "Starting Epoch" named range.
     
     Inputs:
         fname - this is the path specification for the "Vehicle Optimizations
@@ -215,11 +229,11 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
             specindex[name] = col
                 
         for resource, tablename in modelspec.items():
-            """ Map the GMAT model resource name to the worksheet column. """
+            """ Map the GMAT model resource name to the worksheet column number. """
             
             if tablename in specindex:
-                """ Match the tablename specified by the modelpov module with the tablename
-                from the specindex dictionary. If the varname is not found, then this 
+                """ Match the variable name specified by the modelpov module with the name
+                from the specindex dictionary. If the variable is not found, then this 
                 resource will not be included in the generated GMAT model file.
                 """
                 modelspec[resource] = specindex[tablename]
@@ -249,20 +263,20 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
         epoch_elab = {}
         incl_elab = {}
         for row, data in enumerate(configspec):
-            """ Generate model run cases. 
-            Each row of configspec represents a configuration for the GMAT model. 
-            The cases must be elaborated by inclination and starting epoch.
+            """ Generate a list of model inputs for the required GMAT batch runs.
+            The list "cases" contains rows of dictionaries. 
+            Each dictionary is a combination of configspec and modelspec formed
+            by associating the data value from configspec to a key which is the 
+            GMAT resource name from modelspec.            
             """
             
             case.clear()
             for resource, col in modelspec.items():
-                """ Extract the GMAT resource names and column indices defined in modelspec. """
-                case[resource] = data[col]
-                """ The dictionary "case" contains the workbook value from configspec  
-                associated to a GMAT resource name from modelspec.
-                A list of these cases is returned to the caller.
+                """ Generate each case using the resource name and column number in
+                modelspec.
                 """
-                
+                case[resource] = data[col]
+               
             epoch_elab.clear()
             for epoch in epochlist:
                 """ Elaborate the list of cases, a new line for each epoch. """
