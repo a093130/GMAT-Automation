@@ -1,3 +1,4 @@
+#! python
 # -*- coding: utf-8 -*-
 """
 Created on Wed Feb  6 19:17:02 2019
@@ -20,7 +21,6 @@ Created on Wed Feb  6 19:17:02 2019
     01 Mar 2019, Multiprocessing Enhancement.
                  
 """
-
 import os
 import time
 import re
@@ -29,7 +29,6 @@ import logging
 import traceback
 import getpass
 import random
-from pathlib import Path
 import subprocess as sp
 from multiprocessing import Pool
 from multiprocessing import cpu_count
@@ -43,8 +42,6 @@ cpto = 300
 rsrv_cpus = 2
 """ Reserve 2 cores for system processes and services (daemons). Spikes on process context swap. """
 
-
-
 def delay_run():
     """ Helper to randomize start of child processes. Minimizes GMAT log file collisions. """
     numerator = random.randrange(1,6,1)
@@ -53,7 +50,7 @@ def delay_run():
     time.sleep(delay)
     
 def run_gmat(args):
-    """ GMAT wrapper to allow multiprocess.Pool to parallelize the executtion of GMAT.
+    """ GMAT wrapper to allow multiprocess.Pool to parallelize the execution of GMAT.
     Input arguments are contained in a list as follows:
         gmat_arg[0] is the GMAT script file path,
         gmat_arg[1] is the managed output queue connecting the child process to the main process.
@@ -65,7 +62,7 @@ def run_gmat(args):
         
     try:
         proc = sp.Popen(['gmat', '-m', '-ns', '-x', '-r', str(args[0])], stdout=sp.PIPE, stderr=sp.STDOUT)   
-        """ Run GMAT for path names passed as args[0].
+        """ Run GMAT for path names passed as args[0].  The GMAT executable must be in the system path.
         GMAT Arguments:
         -m: Start GMAT with a minimized interface.
         -ns: Start GMAT without the splash screen showing.
@@ -79,7 +76,7 @@ def run_gmat(args):
         https://thraxil.org/users/anders/posts/2008/03/13/Subprocess-Hanging-PIPE-is-your-enemy/
         
         Attempt to maintain the buffer by reading it frequently, the timeout
-        value should be long enough for GMAT to complete.  Check the GTMAT output from 
+        value should be long enough for GMAT to complete.  Check the GMAT output from 
         communicate() to be certain.
         """
         outs = outs.decode('UTF-8')
@@ -108,7 +105,6 @@ def run_gmat(args):
         """ And the stdout buffer must be flushed. """
         
         q.put("********** GMAT completed mission run for file: {0} ***********".format(scriptname))
-
  
 def filter_outs(outs:str, id:str):
     """ Reduce the logging size of the gmat output message.
@@ -128,52 +124,16 @@ def filter_outs(outs:str, id:str):
     
     return loglines
 
-class GMAT_Path:
-    """ This class initializes its instance with the GMAT root path using the 
-    'LOCALAPPDATA' environment variable.  Current version is Windows specific.
-    """
-    def __init__(self):
-        logging.debug('Instance of class GMAT_Path constructed.')
-        
-        self.p_gmat = os.getenv('LOCALAPPDATA')+'\\GMAT'
-        self.executable_path = ''
-                       
-    def get_executable_path(self):
-        """ Convenience function which searches for GMAT.exe. """
-        logging.debug('Method get_executable_path() called.')
-        
-        p = Path(self.p_gmat)
-        
-        gmat_ex_paths = list(p.glob('**/GMAT.exe'))
-        
-        self.executable_path = str(gmat_ex_paths[0])
-        """ Initialize startup_file path. """
-        
-        for pth in gmat_ex_paths:
-            """ Where multiple GMAT.exe instances are found, use the last modified. """          
-            old_p = Path(self.executable_path)
-            old_mtime = old_p.stat().st_mtime
-            
-            p = Path(pth)
-            mtime = p.stat().st_mtime
-
-            if mtime - old_mtime > 0:
-                self.executable_path = str(pth + 'GMAT.exe')
-            else:
-                continue
-
-        logging.info('The GMAT executable path is %s.', self.executable_path)
-        
-        return self.executable_path
-
 if __name__ == "__main__":
     """ Retrieve the batch file and run GMAT for each model file listed """
     __spec__ = None
-    """ Tweak to get Spyder IPython to execute this code. See:
-    https://stackoverflow.com/questions/45720153/python-multiprocessing-error-attributeerror-module-main-has-no-attribute
+    """ Necessary tweak to get Spyder IPython to execute this code. 
+    See:
+    https://stackoverflow.com/questions/45720153/
+    python-multiprocessing-error-attributeerror-module-main-has-no-attribute
     """
     logging.basicConfig(
-            filename='./appLog.log',
+            filename='./BatcherLog.log',
             level=logging.INFO,
             format='%(asctime)s %(filename)s %(levelname)s:\n%(message)s', datefmt='%d%B%Y_%H:%M:%S')
 

@@ -1,10 +1,11 @@
+#! python
 # -*- coding: utf-8 -*-
 """
 Created on Fri Oct 19 14:35:48 2018
 
-@author: colinhelms@outlook.com
+@author: colin helms
 
-@Description:
+@description:
     This script produces GMAT model Include files containing 
     variants of model resource values and parameters.  The module supports 
     batch processing of different mission scenarios in which the spacecraft
@@ -127,15 +128,19 @@ Created on Fri Oct 19 14:35:48 2018
     08 Feb 2019, Fix near line 443, include model filename fixed.
     09 Feb 2019, Fix near lines 249, 288, 300, 307 357: is "ReportFile" 
         should be "ReportFile1".
+    10 Apr 2019, Flow Costates through to model from worksheet.
+    16 Apr 2019, configspec value formatting moved to fromconfigsheet.py
        
 """
+#from modelgen import find_gmat
+
 import sys
 import os
 import re
 import time
 import logging
 from shutil import copy as cp
-from pathlib import Path
+from gmatlocator import CGmatPath
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
 import fromconfigsheet as cfg
 
@@ -143,32 +148,69 @@ model_template = 'ModelMissionTemplate.script'
 model_static_res = 'Include_StaticDefinitions.script'
 model_miss_def = 'Include_MissionDefinitions.script'
 
-class GMAT_Particulars:
+
+class GMAT_Particulars(CGmatPath):
     """ This class initializes its instance with the script output path taken from
     the gmat_startup_file.txt.
-    
-    TODO: make this class inherit from gmat_batcher.GMAT_Path
+
     """
     def __init__(self):
         logging.debug('Instance of class GMAT_Particulars constructed.')
         
-        self.p_gmat = os.getenv('LOCALAPPDATA')+'\\GMAT'
-        self.startup_file_path = ''
-        self.output_path = ''
-                
+        super().__init__()
+        
+#        self.p_gmat = os.getenv('LOCALAPPDATA')+'\\GMAT'
+        self.startup_file_path = None
+        self.output_path = None
+
+    def get_startup_file_path(self):
+        """ The gmat_startup_gile.txt is located in the same directory as GMAT.exe. """
+        
+        ex_file_path = CGmatPath.get_executable_path(self)
+        
+        rege = re.compile('gmat.exe', re.IGNORECASE)
+        
+        self.startup_file_path = rege.sub('gmat_startup_file.txt', ex_file_path)
+        
+        return self.startup_file_path
+    
+#    def get_startup_file_path(self):
+#        """ Convenience function which searches for gmat_statup_file.txt. """
+#        logging.debug('Method get_startup_file_path() called.')
+#        
+#        p = super().get_root_path()
+#        gmat_su_paths = list(p.glob('**/gmat_startup_file.txt'))
+#        
+#        self.startup_file = gmat_su_paths[0]
+#        """ Initialize startup_file path. """
+#        
+#        for pth in gmat_su_paths:
+#            """ Where multiple gmat_startup_file instances are found, use the last modified. """          
+#            old_p = Path(self.startup_file)
+#            old_mtime = old_p.stat().st_mtime
+#            
+#            p = Path(pth)
+#            mtime = p.stat().st_mtime
+#
+#            if mtime - old_mtime > 0:
+#                self.startup_file_path = pth
+#            else:
+#                continue
+#
+#        logging.info('The GMAT startup file is %s.', self.startup_file_path)
+#        
+#        return self.startup_file_path
+    
     def get_output_path(self):
         """ The path defined for all manner of output in gmat_startup_file.txt """
         logging.debug('Method get_output_path() called.')
         
-        p = str(self.output_path)
-        
-        if p.count('\\') | p.count('/') <= 1:
-            self.get_startup_file_path()
-        
         rege = re.compile('^OUTPUT_PATH')
-        
+               
+        su_path = self.get_startup_file_path()
+                
         try:
-            with open(self.startup_file_path) as f:
+            with open(su_path) as f:
                 """ Extract path string text assigned to OUTPUT_PATH in file. """
                 for line in f:
                     if rege.match(line):
@@ -182,7 +224,8 @@ class GMAT_Particulars:
             sys.exit(-1)
 
         rege = re.compile(r'^OUTPUT_PATH\s*= ')
-        """ Clean-up the path string """
+        """ Need to clean-up the path string. """
+        
         self.output_path = rege.sub('', self.output_path)
         
         rege = re.compile('\n')
@@ -192,40 +235,12 @@ class GMAT_Particulars:
         logging.info('The GMAT output path is %s.', self.output_path)
         
         return self.output_path
-        
-    def get_startup_file_path(self):
-        """ Convenience function which searches for gmat_statup_file.txt. """
-        logging.debug('Method get_startup_file_path() called.')
-        
-        p = Path(self.p_gmat)
-        
-        gmat_su_paths = list(p.glob('**/gmat_startup_file.txt'))
-        
-        self.startup_file = gmat_su_paths[0]
-        """ Initialize startup_file path. """
-        
-        for pth in gmat_su_paths:
-            """ Where multiple gmat_startup_file instances are found, use the last modified. """          
-            old_p = Path(self.startup_file)
-            old_mtime = old_p.stat().st_mtime
             
-            p = Path(pth)
-            mtime = p.stat().st_mtime
-
-            if mtime - old_mtime > 0:
-                self.startup_file_path = pth
-            else:
-                continue
-
-        logging.info('The GMAT startup file is %s.', self.startup_file_path)
-        
-        return self.startup_file_path
-    
 class ModelSpec:
     """ This class wraps operations on the configsheet to obtain the pov dictionary."""
     def __init__(self, wbname):
         logging.debug('Instance of class ModelSpec constructed.')
-        
+                
         self.wbpath = wbname
         self.cases = []
            
@@ -233,25 +248,28 @@ class ModelSpec:
         """ Access the initialized workbook to get the configuration spec """
         logging.debug('Method get_cases() called.')
         
+        import fromconfigsheet as cfg
+        
         try:
             self.cases = cfg.modelspec(self.wbpath)
 
         except cfg.Ultima as u:
             logging.error('Call to modelspec failed. In %s, %s', u.source, u.message)
             
-        rege_comma = re.compile(',+')
-        rege_utc = re.compile(' UTC')
+#        rege_comma = re.compile(',+')
+#        rege_utc = re.compile(' UTC')
         
-        for case in self.cases:
-            """ Fix GMAT syntax incompatibilities and inconsistencies. 
-            TODO: These edits here defeat the intent of factoring the GMAT
-            resource dictionary into modelpov.py.  Perhaps the value formatting
-            ought to be performed in fromconfigsheet.py using the workbook table headings.
-            """
-            case['ReportFile1.Filename'] = str(case['ReportFile1.Filename'])
-            case['EOTV.Epoch'] = str(rege_utc.sub('', case['EOTV.Epoch']))
-            case['DefaultOrbitView.ViewPointVector'] = \
-                rege_comma.sub('', repr(case['DefaultOrbitView.ViewPointVector']))
+#        for case in self.cases:
+#            """ Fix GMAT syntax incompatibilities and inconsistencies. 
+#            These edits here defeat the intent of factoring the GMAT
+#            resource dictionary into modelpov.py.  The value formatting
+#            ought to be performed in fromconfigsheet.py using the workbook table headings.
+#            
+#            """
+#            case['ReportFile1.Filename'] = str(case['ReportFile1.Filename'])
+#            case['EOTV.Epoch'] = str(rege_utc.sub('', case['EOTV.Epoch']))
+#            case['DefaultOrbitView.ViewPointVector'] = \
+#                rege_comma.sub('', repr(case['DefaultOrbitView.ViewPointVector']))
         
         return self.cases
     
@@ -262,7 +280,9 @@ class ModelSpec:
         return self.wbpath
    
 class ModelWriter:
-    """ This class wraps operations to generate the GMAT model include files. """    
+    """ This class wraps operations to generate the GMAT model include files. 
+    There should be one ModelWriter instance for each elaborated row in configspec.
+    """    
     def __init__(self, spec, outpath): 
         logging.debug('Instance of class ModelWriter constructed.')
         
@@ -276,39 +296,56 @@ class ModelWriter:
         
         self.case.update(spec)
         
-        epoch = str(self.case['EOTV.Epoch'])
-        epoch = epoch[0:12]
-        """ Clean-up illegal filename charcter in EOTV.Epoch. """
+        import modelpov as pov
         
-        payload = self.case['EOTV.Id']
-        """ Swap configuration Id (part of ReportFile name) into EOTV.Id.
-        GMAT has no resource for payload mass, so EOTV.Id is used to carry it.
-        TODO: use of the GMAT resource name here defeats the intent of factoring
-        them into modelpov.py.  Using the ReportFile name to carry the spacecraft
-        id is a kludge and should be corrected.  Suggest putting the sid into 
-        the workbook on the Mission Parameters tab.
-        """
-        sid = self.case['ReportFile1.Filename']
-        self.case['EOTV.Id'] = sid
+        gmat_vars = pov.getvarnames()
+        msn_vars = pov.getrecursives()
         
+        if 'PL_MASS' in gmat_vars:
+            payload = self.case['PL_MASS']
+        else:
+            payload = 0
 
+        if 'EOTV.Epoch' in msn_vars:
+            epoch = str(self.case['EOTV.Epoch'])
+            
+            epochstr = epoch[0:11]               
+            """ Clean-up illegal character ':' in nameroot. """
+        else:
+            epochstr = 'default_epoch'        
+        
+        if 'EOTV.INC' in msn_vars:
+            inclination = str(self.case['EOTV.INC'])
+        else:
+            inclination = 0
+            
         rege=re.compile(' +')
         """ Eliminate one or more blank characters. """
         
         self.nameroot = rege.sub('', self.case['ReportFile1.Filename'] +\
                                  '_' + str(payload) + 'kg' +\
-                                 '_' + epoch +\
-                                 '_' + str(self.case['EOTV.INC']) +\
+                                 '_' + epochstr +\
+                                 '_' + str(inclination) +\
                                  '_' + time.strftime('J%j_%H%M%S',time.gmtime()))
         """ Generate unique names for the model file output and the reportfile, 
         something like, '16HET8060W_2000.0kg_20Mar2020_28.5_J004_020337'.
-        TODO: use of the literal 'ReportFile1' defeats the factorization of GMAT
-        Resource names into modelpov.py.
-        """       
-        self.reportname = 'ReportFile1_'+ self.nameroot + '.csv'
+        """
+            
         self.inclname = 'Include_' + self.nameroot + '.script'
+        """ Generated script filename """
 
+        self.reportname = 'Reports/ReportFile_'+ self.nameroot + '.csv'
+        """ GMAT requires an absolute path for the ReportFile output. """
+                
+        self.case['ReportFile1.Filename'] = "'" + str(self.reportname) + "'"
+        self.case['EOTV.Id'] = "'" + str(self.case['EOTV.Id']) + "'"
+        self.case['EOTV.Epoch'] = "'" + str(self.case['EOTV.Epoch']) + "'"
+        """ GMAT requires single quotes around character lines. 
+        This was very hard - beware that GMAT will not execute the model
+        if you screw this up.
+        """
         p = str(self.out_path)
+        
         if p.count('\\') > 1:
             self.modelpath = self.inclpath = p + 'Batch\\'
         else:
@@ -354,16 +391,6 @@ class ModelWriter:
         """ Extract each key:value pair, form GMAT syntax, write it to the outpath. """
         logging.debug('Method xform_write() called.')
         
-        self.reportname = self.out_path + 'Reports/' + self.reportname
-        """ GMAT requires an absolute path for the ReportFile output. 
-        TODO: Use of the literal 'ReportFile1' defeats the factorization of GMAT
-        Resource names into modelpov.py.
-        """        
-        self.case['ReportFile1.Filename'] = "'" + str(self.reportname) + "'"
-        self.case['EOTV.Id'] = "'" + str(self.case['EOTV.Id']) + "'"
-        self.case['EOTV.Epoch'] = "'" + str(self.case['EOTV.Epoch']) + "'"
-        """ GMAT requires the single quotes around character lines """
-        
         writefilename = self.get_inclpath() + self.get_inclname()
         
         try:        
@@ -395,7 +422,8 @@ if __name__ == "__main__":
     
     fname = QFileDialog().getOpenFileName(None, 'Open Configuration Workbook', 
                        os.getenv('USERPROFILE'))
-        
+    # TODO - a more feature rich GUI.
+    
     logging.info('Configuration workbook is %s', fname[0])
     
     spec = ModelSpec(fname[0])
@@ -445,7 +473,7 @@ if __name__ == "__main__":
         line = ["#Include 'TBR'\n", "#Include 'TBR'\n", "#Include 'TBR'\n"]
 
 #FIX 02/08/2019       
-        incl = mw.get_inclpath() + mw.get_inclname()
+        includp = mw.get_inclpath() + mw.get_inclname()
         
         try:                  
             with open(dst,'a+') as mmt:   
@@ -453,7 +481,7 @@ if __name__ == "__main__":
                 line[0] = rege.sub(static_include, line[0])                        
 #FIX 02/08/2019
 #               line[1] = rege.sub(dst, line[1])
-                line[1] = rege.sub(incl, line[1])
+                line[1] = rege.sub(includp, line[1])
                 line[2] = rege.sub(mission_include, line[2])
                 """ Order of these includes is important. """
                 

@@ -52,14 +52,19 @@ Created on Sat Nov 17 09:49:45 2018
 @Change Log:
     15 Nov 2018, baseline set of model resources supporting paper AIAA-2018-4718
     09 Feb 2019, Integration, Fix ReportFile parameter, should be "ReportFile1".
+    10 Apr 2019, Use GMAT user variable Costate to store Costates.  Removed kludge
+        using 'EOTV.ID' to store payload mass.  Associate 'EOTV.ID' with 'SID'.
+        Use GMAT user variable 'PL_MASS' to store 'Payload'
     
 """
 def getvarnames():
-    """ return dictionary of GMAT resource name by configspec variable name. """
+    """ This dictionary maps GMAT resource names to the workbook name, which is the
+    table heading in row 1 of the worksheet named 'GMAT'. 
+    """
     var2gmat = dict([
                        ('ReportFile1.Filename', 'Configuration'),
-                       ('EOTV.Id', 'Payload' ),
                        ('EOTV.DryMass','Dry Mass'),
+                       ('PL_MASS', 'Payload'),
                        ('HET1.MaximumUsablePower', 'Max Thrust Power'),
                        ('HET1.MinimumUsablePower', 'Min Thrust Power'),
                        ('HET1.FixedEfficiency', 'Efficiency'),
@@ -72,10 +77,11 @@ def getvarnames():
     return var2gmat.copy()
 
 def getrecursives():
-    """ Return  dictionary of GMAT resource name by mission parameter. """
+    """ This dictionary  which are named ranges of the worksheet named 'Mission_Paramsarameter. """
     varmultiplier = dict([
                         ('EOTV.Epoch', 'Starting Epoch'),
-                        ('EOTV.INC', 'Inclinations')
+                        ('EOTV.INC', 'Inclinations'),
+                        ('COSTATES', 'Costates')
                         ])
 
     return varmultiplier.copy()
