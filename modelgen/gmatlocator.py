@@ -11,8 +11,11 @@ Created on Tue Apr 30 16:20:54 2019
     
 @Change Log:
     30 Apr 2019, refactored from gmat_batcher.py.
+    26 May 2019, Factor in CGMATParticulars from modelgen.py. Used by reducereport, modelgen.
 """
 import os
+import sys
+import re
 import logging
 from pathlib import Path
 
@@ -69,3 +72,63 @@ class CGmatPath:
             logging.info('No GMAT executable path is found.')
         
         return self.executable_path
+
+class CGMATParticulars(CGmatPath):
+    """ This class initializes its instance with the script output path taken from
+    the gmat_startup_file.txt.
+
+    """
+    def __init__(self):
+        logging.debug('Instance of class GMAT_Particulars constructed.')
+        
+        super().__init__()
+        
+#        self.p_gmat = os.getenv('LOCALAPPDATA')+'\\GMAT'
+        self.startup_file_path = None
+        self.output_path = None
+
+    def get_startup_file_path(self):
+        """ The gmat_startup_gile.txt is located in the same directory as GMAT.exe. """
+        
+        ex_file_path = CGmatPath.get_executable_path(self)
+        
+        rege = re.compile('gmat.exe', re.IGNORECASE)
+        
+        self.startup_file_path = rege.sub('gmat_startup_file.txt', ex_file_path)
+        
+        return self.startup_file_path
+        
+    def get_output_path(self):
+        """ The path defined for all manner of output in gmat_startup_file.txt """
+        logging.debug('Method get_output_path() called.')
+        
+        rege = re.compile('^OUTPUT_PATH')
+               
+        su_path = self.get_startup_file_path()
+                
+        try:
+            with open(su_path) as f:
+                """ Extract path string text assigned to OUTPUT_PATH in file. """
+                for line in f:
+                    if rege.match(line):
+                        self.output_path = line
+                
+        except OSError as err:
+            logging.error("OS error: ", err.strerror)
+            sys.exit(-1)
+        except:
+            logging.error("Unexpected error:\n", sys.exc_info())
+            sys.exit(-1)
+
+        rege = re.compile(r'^OUTPUT_PATH\s*= ')
+        """ Need to clean-up the path string. """
+        
+        self.output_path = rege.sub('', self.output_path)
+        
+        rege = re.compile('\n')
+        """ Clean-up newline at the end of each line in a file. """
+        self.output_path = rege.sub('', self.output_path)
+
+        logging.info('The GMAT output path is %s.', self.output_path)
+        
+        return self.output_path

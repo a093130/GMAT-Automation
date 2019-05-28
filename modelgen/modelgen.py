@@ -130,6 +130,7 @@ Created on Fri Oct 19 14:35:48 2018
         should be "ReportFile1".
     10 Apr 2019, Flow Costates through to model from worksheet.
     16 Apr 2019, configspec value formatting moved to fromconfigsheet.py
+    26 May 2019, Factor out class CGMATParticulars to the gmatlocator module.
        
 """
 #from modelgen import find_gmat
@@ -140,101 +141,15 @@ import re
 import time
 import logging
 from shutil import copy as cp
-from gmatlocator import CGmatPath
+from gmatlocator import CGMATParticulars
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
 import fromconfigsheet as cfg
 
 model_template = 'ModelMissionTemplate.script'
 model_static_res = 'Include_StaticDefinitions.script'
 model_miss_def = 'Include_MissionDefinitions.script'
+""" These names are design assumptions and should not change. """
 
-
-class GMAT_Particulars(CGmatPath):
-    """ This class initializes its instance with the script output path taken from
-    the gmat_startup_file.txt.
-
-    """
-    def __init__(self):
-        logging.debug('Instance of class GMAT_Particulars constructed.')
-        
-        super().__init__()
-        
-#        self.p_gmat = os.getenv('LOCALAPPDATA')+'\\GMAT'
-        self.startup_file_path = None
-        self.output_path = None
-
-    def get_startup_file_path(self):
-        """ The gmat_startup_gile.txt is located in the same directory as GMAT.exe. """
-        
-        ex_file_path = CGmatPath.get_executable_path(self)
-        
-        rege = re.compile('gmat.exe', re.IGNORECASE)
-        
-        self.startup_file_path = rege.sub('gmat_startup_file.txt', ex_file_path)
-        
-        return self.startup_file_path
-    
-#    def get_startup_file_path(self):
-#        """ Convenience function which searches for gmat_statup_file.txt. """
-#        logging.debug('Method get_startup_file_path() called.')
-#        
-#        p = super().get_root_path()
-#        gmat_su_paths = list(p.glob('**/gmat_startup_file.txt'))
-#        
-#        self.startup_file = gmat_su_paths[0]
-#        """ Initialize startup_file path. """
-#        
-#        for pth in gmat_su_paths:
-#            """ Where multiple gmat_startup_file instances are found, use the last modified. """          
-#            old_p = Path(self.startup_file)
-#            old_mtime = old_p.stat().st_mtime
-#            
-#            p = Path(pth)
-#            mtime = p.stat().st_mtime
-#
-#            if mtime - old_mtime > 0:
-#                self.startup_file_path = pth
-#            else:
-#                continue
-#
-#        logging.info('The GMAT startup file is %s.', self.startup_file_path)
-#        
-#        return self.startup_file_path
-    
-    def get_output_path(self):
-        """ The path defined for all manner of output in gmat_startup_file.txt """
-        logging.debug('Method get_output_path() called.')
-        
-        rege = re.compile('^OUTPUT_PATH')
-               
-        su_path = self.get_startup_file_path()
-                
-        try:
-            with open(su_path) as f:
-                """ Extract path string text assigned to OUTPUT_PATH in file. """
-                for line in f:
-                    if rege.match(line):
-                        self.output_path = line
-                
-        except OSError as err:
-            logging.error("OS error: ", err.strerror)
-            sys.exit(-1)
-        except:
-            logging.error("Unexpected error:\n", sys.exc_info())
-            sys.exit(-1)
-
-        rege = re.compile(r'^OUTPUT_PATH\s*= ')
-        """ Need to clean-up the path string. """
-        
-        self.output_path = rege.sub('', self.output_path)
-        
-        rege = re.compile('\n')
-        """ Clean-up newline at the end of each line in a file. """
-        self.output_path = rege.sub('', self.output_path)
-
-        logging.info('The GMAT output path is %s.', self.output_path)
-        
-        return self.output_path
             
 class ModelSpec:
     """ This class wraps operations on the configsheet to obtain the pov dictionary."""
@@ -279,10 +194,11 @@ class ModelSpec:
         
         return self.wbpath
    
-class ModelWriter:
-    """ This class wraps operations to generate the GMAT model include files. 
-    There should be one ModelWriter instance for each elaborated row in configspec.
-    """    
+class CModelWriter:
+    """ This class wraps operations to generate the GMAT model include files.
+    
+    There should be one CModelWriter instance for each elaborated row in configspec.
+    """ 
     def __init__(self, spec, outpath): 
         logging.debug('Instance of class ModelWriter constructed.')
         
@@ -429,7 +345,7 @@ if __name__ == "__main__":
     spec = ModelSpec(fname[0])
     cases = spec.get_cases()
     
-    gmat_paths = GMAT_Particulars()
+    gmat_paths = CGMATParticulars()
     o_path = gmat_paths.get_output_path()
     
     src = o_path + model_template
@@ -440,7 +356,7 @@ if __name__ == "__main__":
     
     for case in cases:
         """ Initialize an instance of writer for each line of configuration. """
-        mw = ModelWriter(case, o_path)
+        mw = CModelWriter(case, o_path)
         writer_list.append(mw)
 
         mw.xform_write()
