@@ -65,80 +65,72 @@ class Ultima(Exception):
         self.message = message
         logging.warning(self.message)
 
-def sheetvars(fname=r'Vehicle Optimization Tables.xlsx'):
-    """ Reads configs from workbook at given file path returns table from top left cell. """
+def sheetvars(sht):
+    """ This is the configspec. The size of this range is variable. """
 
     logging.debug('Function sheetvars() called.')
     
-    try:
-        wb = xw.Book(fname)
-        
-        sht = wb.sheets('GMAT')        
+    if sht != None:       
         return sht.range('A1').expand().value
-        """ This is the configspec. The size of this range is variable. """
-    
-    except OSError as ouch:
-        logging.error('Open workbook failed in call to sheetvars(). \nOS error: %s.\nfilename:',\
-                      ouch.strerror, ouch.filename)        
-        return None
-        wb.close()
-
-    except pwin.com_error as ouch:
-        logging.error('Access to sheet "GMAT" raised com error. %s %s',\
-                      str(type(ouch)), str(ouch.args[1]))
-        wb.close()
-        return None
-                
-def mission_params(fname=r'Vehicle Optimization Tables.xlsx'):
-    """ Factored out code to open mission params worksheet. """
-    
-    logging.debug('Function mission_params() called.')
-    
-    try:
-        wb = xw.Book(fname)
-        return wb.sheets('Mission Params')
-    
-    except OSError as ouch:
-        logging.error('Open workbook failed. \nOS error: %s.\nfilename:',\
-                      ouch.strerror, ouch.filename)
-        wb.close()
-        return None
-    
-    except pwin.com_error as ouch:
-        logging.error('Access to sheet "Mission Params" raised com error. %s %s',\
-                      str(type(ouch)), str(ouch.args[1]))
-        return None
-    
-    except Exception as e:
-        logging.error('Access to sheet "Mission Params" raised unancticipated error. %s %s',\
-                      str(type(e)), str(e.args[1]))
+    else:
         return None    
                 
-def mission(fname=r'Vehicle Optimization Tables.xlsx'):
+#def mission_params(fname=r'Vehicle Optimization Tables.xlsx'):
+#    """ Factored out code to open mission params worksheet. """
+    
+#    logging.debug('Function mission_params() called.')
+    
+#    try:
+#        wb = xw.Book(fname)
+#        return wb.sheets('Mission Params')
+    
+#    except OSError as ouch:
+#        logging.error('Open workbook failed. \nOS error: %s.\nfilename:',\
+#                      ouch.strerror, ouch.filename)
+#        wb.close()
+#        return None
+#    
+#    except pwin.com_error as ouch:
+#        logging.error('Access to sheet "Mission Params" raised com error. %s %s',\
+#                      str(type(ouch)), str(ouch.args[1]))
+#        return None
+#    
+#    except Exception as e:
+#        logging.error('Access to sheet "Mission Params" raised unancticipated error. %s %s',\
+#                      str(type(e)), str(e.args[1]))
+#        return None    
+                
+def mission(sht):
     """ Reads the mission name for use as root of output filenames """
 
     logging.debug('Function mission() called.')
-    
-    sht = mission_params(fname)
       
     if sht != None:       
         return sht.range('Mission_Name').value    
     else:
         return None
    
-def epochvars(fname=r'Vehicle Optimization Tables.xlsx'):
+def smavars(sht):
+    """ Reads the initial and final SMA values from workbook. """
+
+    logging.debug('Function smavars() called.')
+      
+    if sht != None:       
+        return np.around(sht.range('Altitude').value, 4)
+    else:
+        return None
+
+def epochvars(sht):
     """ Reads list of starting epoch values from workbook. """
 
     logging.debug('Function epochvars() called.')
-
-    sht = mission_params(fname)
       
     if sht != None:       
         return sht.range('Starting_Epoch').value    
     else:
         return None
 
-def inclvars(fname=r'Vehicle Optimization Tables.xlsx'):
+def inclvars(sht):
     """ Reads and returns the inclination table from the workbook. 
     The inclination table is returned as a list of two columns and m rows, where each row
     identifies one model case for simulation of an inclination change.
@@ -148,11 +140,9 @@ def inclvars(fname=r'Vehicle Optimization Tables.xlsx'):
     """
 
     logging.debug('Function inclvars() called.')
-               
-    sht = mission_params(fname)
       
     if sht != None:       
-        return sht.range('Inclinations').value    
+        return np.around(sht.range('Inclinations').value, 3)  
     else:
         return None
 
@@ -161,10 +151,24 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
     corresponding to the table structure in the GMAT tab. """
 
     logging.debug('Function modelspec() called.')
+
+    try:
+        excel = xw.App()
+        excel.visible=False
+        
+        wingbk = excel.books.open(fname)
+        msheet = wingbk.sheets['Mission Params']
+        ssheet = wingbk.sheets('GMAT')
+        
+    except OSError as ouch:
+        logging.error('Open {0} failed. \nOS error: {1}.'.format(ouch.strerror, ouch.filename))
+
+    except pwin.com_error as ouch:
+        logging.error('Access to sheet raised Windows com error. {0}, {1}'.format(type(ouch), ouch.args[1]))
     
     try:        
         """ Get the configspec table. """
-        spectable = sheetvars(fname)
+        spectable = sheetvars(ssheet)
         
         """ Develop an index of table column names to column number.
         The column names in row 0 of the table are popped, e.g. removed. 
@@ -211,18 +215,22 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
         the mission parameters tab of the workbook. The number of cases will be the 
         number of rows of configspec x number of epochs x number of inclinations.
         """
-        epochlist = epochvars(fname)
+        epochlist = epochvars(msheet)
         """ List epochlist contains possible multiple values for gmat starting epoch associated to 
         the corresponding viewpoint vector.
         """
-        ilist = np.array(inclvars(fname))
+        ilist = inclvars(msheet)
         """ List inclist contains the multiple values selected for modeling inclination
         change, each inclination value is associated with an Alfano inclination costate.
         """
-        case = {}
+        smalist = smavars(msheet)
+        """ List smalist contains the initial and final values of semi-major axis. """
+        
         cases = []
-        epoch_elab = {}
-        incl_elab = {}
+        case = {}
+#        epoch_elab = {}
+#        incl_elab = {}
+#        alti_elab = {}
         for row, data in enumerate(configspec):
             """ Generate a list of model inputs for the required GMAT batch runs.
             The list "cases" contains rows of dictionaries. 
@@ -230,35 +238,64 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
             by associating the data value from configspec to a key which is the 
             GMAT resource name from modelspec.            
             """            
-            case.clear()
+#            case.clear()
             for resource, col in modelspec.items():
-                """ Generate each case using the resource name and column number in
-                modelspec.
+                """ Generate the case corresponding to the row of configspec
+                using the resource name and column number in modelspec. The table heading 
+                was replaced with its column number in modelspec above.
                 """
                 case[resource] = data[col]
-               
-            epoch_elab.clear()
-            for epoch in epochlist:
-                """ Elaborate the list of cases, a new line for each epoch. """
-                epoch_elab = case.copy()
                                
-                epoch_elab['EOTV.Epoch'] = epoch[0]
-                epoch_elab['DefaultOrbitView.ViewPointVector'] = epoch[1:4]
-                """ Extract the 3 orbit view components. """
+#            epoch_elab.clear()
+            for epoch in epochlist:
+                """ Elaborate the list of cases based on mission_params. """
                 
-                for incl, lamb in ilist:
-                    """ Elaborate the list of cases, a new line for each inclination. """
-                    incl_elab = epoch_elab.copy()
+#                epoch_elab = case.copy()
+                               
+#                epoch_elab['EOTV.Epoch'] = epoch[0]
+#                epoch_elab['DefaultOrbitView.ViewPointVector'] = epoch[1:4]
+                
+#                alti_elab.clear()
+                for isma, fsma in smalist:
+#                    alti_elab = epoch_elab.copy()
                     
-                    start_incl = np.abs(incl)
-                    incl_elab['EOTV.INC'] = start_incl
-                    incl_elab['MORE'] = incl/start_incl
-                    """ Calculation gives the sign of inclination change, negative means decrease. """
-#                   TODO: better assumption is that desired inclination change != EOTV.INC.
+#                    alti_elab['SMA_INIT'] = isma
+#                    alti_elab['SMA_END'] = fsma
                     
-                    incl_elab['COSTATE'] = lamb                   
-                    
-                    cases.append(incl_elab)
+#                    incl_elab.clear()
+                    for incl, costate in ilist:
+                        """ Elaborate the list of cases, a new line for each inclination. """
+#                        incl_elab = alti_elab.copy()
+                        
+                        start_incl = np.abs(incl)
+#                        incl_elab['COSTATE'] = costate
+                        case['COSTATE'] = costate                        
+#                        incl_elab['EOTV.INC'] = start_incl
+                        case['EOTV.INC'] = start_incl
+                        
+                        if start_incl == 0:
+                            
+#                            incl_elab['MORE'] = 1
+                            case['MORE'] = 1
+                            """ If the initial inclination is 0, the assumption is that the inclination
+                            change will be positive, i.e. a return trajectory from geosynchronous inclination.
+                            """                            
+                        else:                       
+#                            incl_elab['MORE'] = incl/start_incl
+                            case['MORE'] = incl/start_incl
+                            """ The convention is that a negative value of inclination indicates a recquirement
+                            to decrease inclination and positive value a requirement to increase inclination.
+                                                        
+                            The amount of inclination change is determined by the costate value.
+                            """
+                                              
+                        case['EOTV.Epoch'] = epoch[0]
+                        case['DefaultOrbitView.ViewPointVector'] = epoch[1:4]
+                        case['SMA_INIT'] = isma
+                        case['SMA_END'] = fsma
+                        
+#                        cases.append(incl_elab)
+                        cases.append(case.copy())
                                     
         logging.debug('Output is: %s', repr(cases))
         logging.info('Nominal termination. Rows processed = %s', row+1)
@@ -280,15 +317,18 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
         return (cases)
                  
     except Ultima as u:
-        logging.debug('Output is: %s', repr(cases))
         logging.info('%Error termination.')
+        
+    finally:
+        srcname = os.path.basename(fname)
+        excel.books[srcname].close()
         
 if __name__ == "__main__":
     """
     Test case and example of use.
     """    
     logging.basicConfig(
-            filename='./appLog.log',
+            filename='./configsheet.log',
             level=logging.DEBUG,
             format='%(asctime)s %(filename)s \n %(message)s', 
             datefmt='%d%B%Y_%H:%M:%S')
@@ -303,20 +343,17 @@ if __name__ == "__main__":
     logging.info('Configuration workbook is: %s', fname[0])
     
     try:
-        m_name = mission(fname[0])
-    except Ultima as u:
-        logging.info('%s %s', u.source, u.message)
-
-    try:
         cases = modelspec(fname[0])
+        
+        logging.debug('Mission specified cases are:\n%s', repr(cases))
+        
     except Ultima as u:
         logging.info('%s %s', u.source, u.message)
-    finally:
-        logging.debug('For mission, %s cases are:\n%s', m_name, repr(cases))
-        
-    print('For mission', m_name, 'GMAT simulation cases are:\n', repr(cases))
     
-    logging.shutdown()
+    finally:
+        app.quit()
+        logging.shutdown()
+
     
     
     

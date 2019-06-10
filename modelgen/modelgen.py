@@ -140,10 +140,10 @@ import os
 import re
 import time
 import logging
+import fromconfigsheet as cfg
 from shutil import copy as cp
 from gmatlocator import CGMATParticulars
-from PyQt5.QtWidgets import(QApplication, QFileDialog)
-import fromconfigsheet as cfg
+from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 
 model_template = 'ModelMissionTemplate.script'
 model_static_res = 'Include_StaticDefinitions.script'
@@ -151,7 +151,7 @@ model_miss_def = 'Include_MissionDefinitions.script'
 """ These names are design assumptions and should not change. """
 
             
-class ModelSpec:
+class CModelSpec:
     """ This class wraps operations on the configsheet to obtain the pov dictionary."""
     def __init__(self, wbname):
         logging.debug('Instance of class ModelSpec constructed.')
@@ -162,9 +162,7 @@ class ModelSpec:
     def get_cases(self):
         """ Access the initialized workbook to get the configuration spec """
         logging.debug('Method get_cases() called.')
-        
-        import fromconfigsheet as cfg
-        
+                
         try:
             self.cases = cfg.modelspec(self.wbpath)
 
@@ -209,6 +207,7 @@ class CModelWriter:
         self.inclname = ''
         self.inclpath = ''
         self.model = ''
+        self.mission_name = ''
         
         self.case.update(spec)
         
@@ -217,31 +216,54 @@ class CModelWriter:
         gmat_vars = pov.getvarnames()
         msn_vars = pov.getrecursives()
         
-        if 'PL_MASS' in gmat_vars:
-            payload = self.case['PL_MASS']
-        else:
-            payload = 0
-
         if 'EOTV.Epoch' in msn_vars:
             epoch = str(self.case['EOTV.Epoch'])
             
             epochstr = epoch[0:11]               
             """ Clean-up illegal character ':' in nameroot. """
         else:
-            epochstr = 'default_epoch'        
-        
+            epochstr = 'default_epoch'
+            
         if 'EOTV.INC' in msn_vars:
-            inclination = str(self.case['EOTV.INC'])
+            inclination = round(self.case['EOTV.INC'], 2)
         else:
             inclination = 0
+
+        if 'PL_MASS' in gmat_vars:
+            payload = round(self.case['PL_MASS'], 0)
+        else:
+            payload = 0
+
+        if 'SMA_INIT' in msn_vars:
+            initsma = round(self.case['SMA_INIT'], 0)
+        else:
+            initsma = 6578
+        
+        if 'SMA_END' in msn_vars:
+            finalsma = round(self.case['SMA_END'], 0)
+        else:
+            finalsma = 65781
             
+        if 'COSTATE' in msn_vars:
+            lamb = round(self.case['COSTATE'], 3)
+
+        if initsma > 0:
+            orbit_ratio = round(finalsma/initsma, 2)
+        else:
+            orbit_ratio = 10
+           
         rege=re.compile(' +')
         """ Eliminate one or more blank characters. """
+        
+        self.mission_name = self.case['ReportFile1.Filename']
+        """ Save the mission name passed in ReportFile1.Filename. """
         
         self.nameroot = rege.sub('', self.case['ReportFile1.Filename'] +\
                                  '_' + str(payload) + 'kg' +\
                                  '_' + epochstr +\
-                                 '_' + str(inclination) +\
+                                 '_R' + str(orbit_ratio) +\
+                                 '_' + str(inclination) + 'deg' +\
+                                 '_' + str(lamb) +\
                                  '_' + time.strftime('J%j_%H%M%S',time.gmtime()))
         """ Generate unique names for the model file output and the reportfile, 
         something like, '16HET8060W_2000.0kg_20Mar2020_28.5_J004_020337'.
@@ -250,7 +272,7 @@ class CModelWriter:
         self.inclname = 'Include_' + self.nameroot + '.script'
         """ Generated script filename """
 
-        self.reportname = 'Reports/ReportFile_'+ self.nameroot + '.csv'
+        self.reportname = 'Reports/'+ self.nameroot + '.csv'
         """ GMAT requires an absolute path for the ReportFile output. """
                 
         self.case['ReportFile1.Filename'] = "'" + str(self.reportname) + "'"
@@ -267,6 +289,12 @@ class CModelWriter:
         else:
             self.modelpath = self.inclpath = p + 'Batch/'
         
+    def get_mission(self):
+        """ Get the unique string at the root of all the generated filenames. """
+        logging.debug('Method get_mission() called.')
+        
+        return self.mission_name
+
     def get_nameroot(self):
         """ Get the unique string at the root of all the generated filenames. """
         logging.debug('Method get_nameroot() called.')
@@ -309,9 +337,14 @@ class CModelWriter:
         
         writefilename = self.get_inclpath() + self.get_inclname()
         
+        varset = {'SMA_INIT','SMA_END','MORE','COSTATE', 'PL_MASS'}
+        """ User defined variables, special handling required. """
         try:        
             with open(writefilename,'w') as pth:
                 for key, value in self.case.items():
+                    if key in varset:
+                        lcrea = 'Create Variable ' + key + ';\n'
+                        pth.write(lcrea)
                     line = 'GMAT ' + str(key) + ' = ' + str(value) + ';\n'
                     pth.write(line)
                                     
@@ -327,14 +360,14 @@ class CModelWriter:
 if __name__ == "__main__":
     """ This script is the top-level entry point for the GMAT Automation system. """
     logging.basicConfig(
-        filename='./appLog.log',
+        filename='./modelgen.log',
         level=logging.INFO,
         format='%(asctime)s %(filename)s %(levelname)s:\n%(message)s', 
         datefmt='%d%B%Y_%H:%M:%S')
 
     logging.info('******************** Automation Started ********************')
     
-    app = QApplication([])
+    qApp = QApplication([])
     
     fname = QFileDialog().getOpenFileName(None, 'Open Configuration Workbook', 
                        os.getenv('USERPROFILE'))
@@ -342,8 +375,16 @@ if __name__ == "__main__":
     
     logging.info('Configuration workbook is %s', fname[0])
     
-    spec = ModelSpec(fname[0])
+    spec = CModelSpec(fname[0])
     cases = spec.get_cases()
+    nrows = len(cases)
+
+    progress = QProgressDialog("Creating {0} Models ...".format(nrows), "Cancel", 0, nrows)
+    progress.setWindowTitle('Model Generator')
+    progress.setValue(0)
+    progress.show()
+
+    qApp.processEvents()
     
     gmat_paths = CGMATParticulars()
     o_path = gmat_paths.get_output_path()
@@ -364,18 +405,16 @@ if __name__ == "__main__":
     
     batchlist = []
     """ This list will be written out to the batch file. """
-    
+    outrow = 0
     for mw in writer_list:
         """ Copy and rename the ModelMissionTemplate for each ModelWriter instance. """
-        try:
-            mission_name = cfg.mission(fname[0]) + '_'
+        if progress.wasCanceled():
+            break
+        
+        outrow += 1
+        progress.setValue(outrow)
             
-        except Exception as e:
-            """ Not a critical error. """
-            logging.warn('Non-critical error accessing cfg.mission(): /n/t%s', e.__str__())
-            mission_name = 'Batch'
-
-        dst = mw.get_inclpath() + mission_name + mw.get_nameroot() + '.script'
+        dst = mw.get_inclpath() + 'Batch_' + mw.get_nameroot() + '.script'
         
         static_include = o_path + model_static_res
         mission_include = o_path + model_miss_def
@@ -442,8 +481,9 @@ if __name__ == "__main__":
     except:
         logging.error("Unexpected error:\n", sys.exc_info())
         sys.exit(-1)
+    finally:
+        logging.info('GMAT batch file creation is completed.')
+        logging.shutdown()
+        qApp.quit()
     
-    logging.info('GMAT batch file creation is completed.')
-    logging.shutdown()
-    
-    
+

@@ -19,6 +19,7 @@ Created on Wed Feb  6 19:17:02 2019
     10 Jan 2019, Initial baseline, Integration branch.
     28 Feb 2019, Working Copy committed to Integration.
     01 Mar 2019, Multiprocessing Enhancement.
+    03 Jun 2019, cleanup by quitting the Qt app.
                  
 """
 import os
@@ -213,6 +214,7 @@ if __name__ == "__main__":
                             
     finally:
         pool.close()
+        app.quit()
         logging.info("!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!\n\n")
             
             

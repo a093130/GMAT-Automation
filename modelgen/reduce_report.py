@@ -32,7 +32,7 @@ import logging
 import traceback
 import getpass
 import csv
-import xlwings as xwng
+#import xlwings as xwng
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
 #from pathlib import Path
@@ -45,18 +45,20 @@ def lines_from_csv(csvfile):
     logging.debug("Extracting lines from report file {0}".format(csvfile))
     
     try:
-        regecr = re.compile('\n')
+        regecr = re.compile('\r\n')
         regesp = re.compile(' ')
     
         with open(csvfile, 'rt', newline='', encoding='utf8') as f:
             lines = list(f)
-            data = dict()
-            
-            for r, row in enumerate(lines):
-                r = regesp.sub('', r)
-                r = regecr.sub('', r)
-                rlist = r.split(',')
-                data = {row, rlist}
+
+            data = {}
+            for row, line in enumerate(lines):
+                
+                line = regesp.sub('', line)
+                line = regecr.sub('', line)
+                rlist = line.split(',')
+                
+                data.update({row: rlist})
             return data
         
     except OSError as e:
@@ -68,7 +70,6 @@ def lines_from_csv(csvfile):
         logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
         return None
     
-
 def csv_to_xlsx(csvfile):
     """ Read a .csv formatted file, write it to .xlsx formatted file of the same basename. Return the written
     filename.
@@ -79,8 +80,7 @@ def csv_to_xlsx(csvfile):
     https://stackoverflow.com/users/235415/ethan
     https://stackoverflow.com/users/596841/pookie
     
-    Beware when data has embedded comma.  
-    TODO: modify the function to make the csv delimiter variable.  The csv module provides for this.
+    Beware when data has embedded comma.
     """
     logging.debug("Converting report file {0}".format(csvfile))
     
@@ -179,8 +179,8 @@ if __name__ == "__main__":
     logging.info("Output summary file %s", summaryfile)
 
     try:
-        excel = xwng.App()
-        excel.visible=False
+#        excel = xwng.App()
+#        excel.visible=False
     
         xout = xwrt.Workbook(summaryfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
         """ Write summary to this file using XlWriter """
@@ -259,9 +259,11 @@ if __name__ == "__main__":
             nrows = len(list(f))
             f.seek(pos)
             
-            progress = QProgressDialog("Summary Report", "Cancel", 0, nrows)
-            progress.show()
+            progress = QProgressDialog("Creating Summary ...", "Cancel", 0, nrows)
+            progress.setWindowTitle('Reduce Report')
             progress.setValue(0)
+            progress.show()
+
             qApp.processEvents()
             
             outrow = 0            
@@ -276,61 +278,67 @@ if __name__ == "__main__":
                 Use XlWriter to write output in .xlsx format.  XLWriter offers significant
                 control over the Excel column and row formats.
                 """
-                
+                rpt = os.path.normpath(filepath)
+                rege = re.compile('\n')
+                filepath = rege.sub('', rpt)
+                 
                 if progress.wasCanceled():
                     break
                 
                 outrow += 1
                 progress.setValue(outrow)
                 
-                rpt = os.path.normpath(filepath)
-                rege = re.compile('\n')
-                filepath = rege.sub('', rpt)
-                """ Cleanup filepath """
-
-                xlsxpath = csv_to_xlsx(str(filepath))
-
-                try:
-                    wingbk = excel.books.open(xlsxpath)
-                    """ Open xlxs workbook for reading using XlWings.
-                    
-                    There is a dependency on the source file, as implemented in accordance with 
-                    the Include_StaticDefinitions.script model template file.
-                                    
-                    Source report file Col A, 'ElapsedDays', end range: write to column B of summary.
-                    Source report file Col B, 'REV', end range: write to column C of summary.
-                    Source report file Col C, 'FuelMass, end range': write to column D of summary.
-                    Source report file Col D, 'SMA', end range: write to column E of summary.
-                    Source report file Col E, 'INC', end range: write to column F of summary.
-                    Source report file Col F, 'ECC', end range: write to column G of summary.
-                    Source report file Cell C2, 'FuelMass': write to column H of summary.
-                    (Column I will be written with a formula.)
-                    """
-
-                    logging.debug("Opened Excel format report file {0}".format(xlsxpath))
-                    
-                except OSError as e:
-                    logging.error("OS error {0}, unable to open file {1}".format(e.strerror, e.filename))
-                    raise e
-            
-                except Exception as e:
-                    lines = traceback.format_exc().splitlines()
-                    logging.error("Exception opening workbook: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-                    raise e
-
-                insheet = wingbk.sheets['Report']
-                """ Name of sheet should be same as set in csv_to_xlsx(). """
-                                                                                   
-                days = insheet.range('A1').end('down').value
-                revs = insheet.range('B1').end('down').value
-                remfuel = insheet.range('C1').end('down').value
-                sma = insheet.range('D1').end('down').value
-                inc = insheet.range('E1').end('down').value
-                ecc = insheet.range('F1').end('down').value
+#                xlsxpath = csv_to_xlsx(str(filepath))
+#
+#                try:
+#                    wingbk = excel.books.open(xlsxpath)
+#                    """ Open xlxs workbook for reading using XlWings.
+#                    
+#                    There is a dependency on the source file, as implemented in accordance with 
+#                    the Include_StaticDefinitions.script model template file.
+#                                    
+#                    Source report file Col A, 'ElapsedDays', end range: write to column B of summary.
+#                    Source report file Col B, 'REV', end range: write to column C of summary.
+#                    Source report file Col C, 'FuelMass, end range': write to column D of summary.
+#                    Source report file Col D, 'SMA', end range: write to column E of summary.
+#                    Source report file Col E, 'INC', end range: write to column F of summary.
+#                    Source report file Col F, 'ECC', end range: write to column G of summary.
+#                    Source report file Cell C2, 'FuelMass': write to column H of summary.
+#                    (Column I will be written with a formula.)
+#                    """
+#
+#                    logging.debug("Opened Excel format report file {0}".format(xlsxpath))
+#                    
+#                except OSError as e:
+#                    logging.error("OS error {0}, unable to open file {1}".format(e.strerror, e.filename))
+#                    raise e
+#            
+#                except Exception as e:
+#                    lines = traceback.format_exc().splitlines()
+#                    logging.error("Exception opening workbook: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+#                    raise e
+#
+#                insheet = wingbk.sheets['Report']
+#                """ Name of sheet should be same as set in csv_to_xlsx(). """
+#                                                                                   
+#                days = insheet.range('A1').end('down').value
+#                revs = insheet.range('B1').end('down').value
+#                remfuel = insheet.range('C1').end('down').value
+#                sma = insheet.range('D1').end('down').value
+#                inc = insheet.range('E1').end('down').value
+#                ecc = insheet.range('F1').end('down').value
+#                
+#                inifuel = insheet.range('C2').value
                 
-                inifuel = insheet.range('C2').value
-                               
-                datalist = [days, revs, remfuel, sma, inc, ecc, inifuel]
+                
+                datadict = lines_from_csv(filepath)
+                nrows = len(datadict)
+                
+                inifuel = datadict[1][2]
+                """ Key 0 gives the headings, key 1 is the first row of data. """
+                
+                datalist = datadict[nrows-1][0:6]                
+                """Last line: [elapsed_days, revs, remaining_fuel, sma, inc, ecc] """
                 
                 filename = os.path.basename(filepath)
                 """Strip the path prefix. """
@@ -352,14 +360,16 @@ if __name__ == "__main__":
                     sumsheet.write(outrow, outcol, data)
                     outcol += 1
                 
-                srcname = os.path.basename(xlsxpath)
-                excel.books[srcname].close()
+                sumsheet.write(outrow, outcol, inifuel)
+                
+#                srcname = os.path.basename(xlsxpath)
+#                excel.books[srcname].close()
                 
                 fueldiff = \
                 '=' + xlut.xl_rowcol_to_cell(outrow, 7 + skipcols) + \
                 '-' + xlut.xl_rowcol_to_cell(outrow, 3 + skipcols)
                                 
-                sumsheet.write_formula(outrow, outcol, fueldiff)
+                sumsheet.write_formula(outrow, outcol + 1, fueldiff)
                 
                 logging.info("Completed extract from Excel report file {0}".format(filename))
                 
@@ -373,6 +383,7 @@ if __name__ == "__main__":
         logging.error("Exception: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
     
     finally:
+        progress.hide()
+        qApp.quit()
         xout.close()
-        excel.quit()
     

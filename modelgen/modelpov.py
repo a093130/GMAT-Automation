@@ -81,7 +81,9 @@ def getrecursives():
     varmultiplier = dict([
                         ('EOTV.Epoch', 'Starting Epoch'),
                         ('EOTV.INC', 'Inclinations'),
-                        ('COSTATES', 'Costates')
+                        ('COSTATE', 'Inclinations'),
+                        ('SMA_INIT', 'Altitude'),
+                        ('SMA_END', 'Altitude')
                         ])
 
     return varmultiplier.copy()
