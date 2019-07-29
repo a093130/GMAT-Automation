@@ -74,32 +74,7 @@ def sheetvars(sht):
         return sht.range('A1').expand().value
     else:
         return None    
-                
-#def mission_params(fname=r'Vehicle Optimization Tables.xlsx'):
-#    """ Factored out code to open mission params worksheet. """
-    
-#    logging.debug('Function mission_params() called.')
-    
-#    try:
-#        wb = xw.Book(fname)
-#        return wb.sheets('Mission Params')
-    
-#    except OSError as ouch:
-#        logging.error('Open workbook failed. \nOS error: %s.\nfilename:',\
-#                      ouch.strerror, ouch.filename)
-#        wb.close()
-#        return None
-#    
-#    except pwin.com_error as ouch:
-#        logging.error('Access to sheet "Mission Params" raised com error. %s %s',\
-#                      str(type(ouch)), str(ouch.args[1]))
-#        return None
-#    
-#    except Exception as e:
-#        logging.error('Access to sheet "Mission Params" raised unancticipated error. %s %s',\
-#                      str(type(e)), str(e.args[1]))
-#        return None    
-                
+                               
 def mission(sht):
     """ Reads the mission name for use as root of output filenames """
 
@@ -111,22 +86,40 @@ def mission(sht):
         return None
    
 def smavars(sht):
-    """ Reads the initial and final SMA values from workbook. """
+    """ Reads the initial and final SMA values from workbook. 
+
+    """
 
     logging.debug('Function smavars() called.')
       
     if sht != None:       
-        return np.around(sht.range('Altitude').value, 4)
+#        return np.around(sht.range('Altitude').value, 4)
+        smarange = np.around(sht.range('Altitude').value, 4)
+        return np.array(smarange, ndmin=2)
+        """
+        A corner case exists where the model spec contains only one line of SMA.
+        A minimum dimension of 2 is expected.
+        """
     else:
         return None
 
 def epochvars(sht):
-    """ Reads list of starting epoch values from workbook. """
+    """ Reads list of starting epoch values from workbook.
+    
+    A corner case exists where the model spec contains only one line of inclination.
+    A minimum dimension of 2 is expected.      
+    """
 
     logging.debug('Function epochvars() called.')
       
     if sht != None:       
-        return sht.range('Starting_Epoch').value    
+#        return sht.range('Starting_Epoch').value
+        epochrange = sht.range('Starting_Epoch').value
+        return np.array(epochrange, ndmin=2)
+        """
+        A corner case exists where the model spec contains only one line of Epoch.
+        A minimum dimension of 2 is expected.
+        """
     else:
         return None
 
@@ -135,14 +128,22 @@ def inclvars(sht):
     The inclination table is returned as a list of two columns and m rows, where each row
     identifies one model case for simulation of an inclination change.
     Each row contains a floating point inclination value (positive or negative)
-    and a floating point costate value (negative).  These rows should be converted
-    to np.ndarray by by the caller.
+    and a floating point costate value (negative).  
+    
+    A corner case exists where the model spec contains only one line of Inclination.
+    A minimum dimension of 2 is expected.
     """
 
     logging.debug('Function inclvars() called.')
       
     if sht != None:       
-        return np.around(sht.range('Inclinations').value, 3)  
+#        return np.around(sht.range('Inclinations').value, 3)  
+        inclrange = np.around(sht.range('Inclinations').value, 3)
+        return np.array(inclrange, ndmin=2)
+        """
+        A corner case exists where the model spec contains only one line of inclination.
+        A minimum dimension of 2 is expected.
+        """
     else:
         return None
 
@@ -184,7 +185,7 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
         """ Dictionary modelspec contains the GMAT worksheet resource-to-heading 
         association. """
         
-        logging.info('Variables in model configuration spec:\n%s', str(tablenames))
+        logging.debug('Variables in model configuration spec:\n%s', str(tablenames))
         
         specindex = {}
         for col, name in enumerate(tablenames):
@@ -219,18 +220,19 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
         """ List epochlist contains possible multiple values for gmat starting epoch associated to 
         the corresponding viewpoint vector.
         """
-        ilist = inclvars(msheet)
+        inclist = inclvars(msheet)
         """ List inclist contains the multiple values selected for modeling inclination
         change, each inclination value is associated with an Alfano inclination costate.
         """
         smalist = smavars(msheet)
         """ List smalist contains the initial and final values of semi-major axis. """
         
+        rege_comma = re.compile(',+')
+        rege_utc = re.compile(' UTC')
+        rege_spc = re.compile(' +')
+        
         cases = []
         case = {}
-#        epoch_elab = {}
-#        incl_elab = {}
-#        alti_elab = {}
         for row, data in enumerate(configspec):
             """ Generate a list of model inputs for the required GMAT batch runs.
             The list "cases" contains rows of dictionaries. 
@@ -238,7 +240,6 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
             by associating the data value from configspec to a key which is the 
             GMAT resource name from modelspec.            
             """            
-#            case.clear()
             for resource, col in modelspec.items():
                 """ Generate the case corresponding to the row of configspec
                 using the resource name and column number in modelspec. The table heading 
@@ -246,42 +247,26 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
                 """
                 case[resource] = data[col]
                                
-#            epoch_elab.clear()
-            for epoch in epochlist:
+            for epoch, xview, yview, zview in epochlist:
                 """ Elaborate the list of cases based on mission_params. """
+
+                view = [ np.float(xview), np.float(yview), np.float(zview) ]
                 
-#                epoch_elab = case.copy()
-                               
-#                epoch_elab['EOTV.Epoch'] = epoch[0]
-#                epoch_elab['DefaultOrbitView.ViewPointVector'] = epoch[1:4]
-                
-#                alti_elab.clear()
                 for isma, fsma in smalist:
-#                    alti_elab = epoch_elab.copy()
-                    
-#                    alti_elab['SMA_INIT'] = isma
-#                    alti_elab['SMA_END'] = fsma
-                    
-#                    incl_elab.clear()
-                    for incl, costate in ilist:
+                    for incl, costate in inclist:
                         """ Elaborate the list of cases, a new line for each inclination. """
-#                        incl_elab = alti_elab.copy()
                         
                         start_incl = np.abs(incl)
-#                        incl_elab['COSTATE'] = costate
                         case['COSTATE'] = costate                        
-#                        incl_elab['EOTV.INC'] = start_incl
                         case['EOTV.INC'] = start_incl
                         
                         if start_incl == 0:
                             
-#                            incl_elab['MORE'] = 1
                             case['MORE'] = 1
                             """ If the initial inclination is 0, the assumption is that the inclination
                             change will be positive, i.e. a return trajectory from geosynchronous inclination.
                             """                            
                         else:                       
-#                            incl_elab['MORE'] = incl/start_incl
                             case['MORE'] = incl/start_incl
                             """ The convention is that a negative value of inclination indicates a recquirement
                             to decrease inclination and positive value a requirement to increase inclination.
@@ -289,21 +274,15 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
                             The amount of inclination change is determined by the costate value.
                             """
                                               
-                        case['EOTV.Epoch'] = epoch[0]
-                        case['DefaultOrbitView.ViewPointVector'] = epoch[1:4]
+                        case['EOTV.Epoch'] = epoch
+                        case['DefaultOrbitView.ViewPointVector'] = view
                         case['SMA_INIT'] = isma
                         case['SMA_END'] = fsma
                         
-#                        cases.append(incl_elab)
                         cases.append(case.copy())
                                     
         logging.debug('Output is: %s', repr(cases))
-        logging.info('Nominal termination. Rows processed = %s', row+1)
-        
-        rege_comma = re.compile(',+')
-        rege_utc = re.compile(' UTC')
-        rege_spc = re.compile(' +')
-        
+                
         for case in cases:
             """ Fix GMAT syntax incompatibilities and inconsistencies. """
             
@@ -322,6 +301,7 @@ def modelspec(fname=r'Vehicle Optimization Tables.xlsx'):
     finally:
         srcname = os.path.basename(fname)
         excel.books[srcname].close()
+        excel.quit()
         
 if __name__ == "__main__":
     """
@@ -345,8 +325,8 @@ if __name__ == "__main__":
     try:
         cases = modelspec(fname[0])
         
-        logging.debug('Mission specified cases are:\n%s', repr(cases))
-        
+        logging.info('Terminating: number of cases in modelspec: {0}'.format(len(cases)))
+      
     except Ultima as u:
         logging.info('%s %s', u.source, u.message)
     

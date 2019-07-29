@@ -38,7 +38,8 @@ from PyQt5.QtWidgets import(QApplication, QFileDialog)
 
 cpto = 300
 """ Child process timeout = 5 minutes: more than sufficient on dual 2.13GHz E5506 XEON, 
-16 Gbyte workstation with GTX 750 GPU 
+16 Gbyte workstation with GTX 750 GPU. For the JS&R paper, run1 07/25/2019, a maximum GMAT run
+time of 294 seconds was recorded for Batch_64HET6342W_36000.0kg_22Sep2020_R6.13_51.6deg_-0.832_J206_235431.script
 """
 rsrv_cpus = 2
 """ Reserve 2 cores for system processes and services (daemons). Spikes on process context swap. """
@@ -70,7 +71,7 @@ def run_gmat(args):
         -x: Exit GMAT after running the specified script.
         -r: Automatically run the specified script after loading.
         """
-        
+        pid = proc.pid
         (outs, errors) = proc.communicate(timeout=cpto)
         """ The buffer passed to Popen() defaults to io.DEFAULT_BUFFER_SIZE, usually 62526 bytes.
         If this is exceeded, the child process hangs with write pending for the buffer to be read.
@@ -81,7 +82,8 @@ def run_gmat(args):
         communicate() to be certain.
         """
         outs = outs.decode('UTF-8')
-        q.put(filter_outs(outs, scriptname))
+        message = 'PID: {0}'.format(pid) + filter_outs(outs, scriptname)
+        q.put(message)
                               
     except sp.TimeoutExpired as e:
         """ This function is meant to be called in the multiprocess context.  Logging
@@ -99,13 +101,15 @@ def run_gmat(args):
     except Exception as e:
         q.put("GMAT: Unanticipated Exception " + e.__doc__ + ", File: " + scriptname)
         
-    finally:
-        proc.kill()
-        """ The child process is not killed by subprocess, so clean it up here."""
+    finally:                          
         (outs, errors) = proc.communicate()
-        """ And the stdout buffer must be flushed. """
+        """ Flush the stdout buffer. """
         
-        q.put("********** GMAT completed mission run for file: {0} ***********".format(scriptname))
+        message = 'Terminating PID: {0} '.format(pid) + scriptname
+        q.put(message)
+        
+        proc.terminate()
+        """ Was 'proc.kill()' but terminate() is better on Windows. """        
  
 def filter_outs(outs:str, id:str):
     """ Reduce the logging size of the gmat output message.
@@ -135,7 +139,7 @@ if __name__ == "__main__":
     """
     logging.basicConfig(
             filename='./BatcherLog.log',
-            level=logging.INFO,
+            level=logging.DEBUG,
             format='%(asctime)s %(filename)s %(levelname)s:\n%(message)s', datefmt='%d%B%Y_%H:%M:%S')
 
     logging.info("!!!!!!!!!! GMAT Batch Execution Started !!!!!!!!!!")
@@ -147,7 +151,7 @@ if __name__ == "__main__":
                  host_attr.version, \
                  host_attr.processor)
     
-    app = QApplication([])
+    QApp = QApplication([])
     
     fname = QFileDialog().getOpenFileName(None, 'Open master batch file.', 
                        os.getenv('USERPROFILE'))
@@ -188,7 +192,7 @@ if __name__ == "__main__":
         while 1:
             qout = task_queue.get(cpto)
             
-            logging.info(qout)
+            logging.info('Process Queue: {0}'.format(qout))
             
             if task_queue.qsize() < 1:
                 break
@@ -213,8 +217,8 @@ if __name__ == "__main__":
         logging.error("Exception: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
                             
     finally:
-        pool.close()
-        app.quit()
+        #pool.close()
+        QApp.quit()
         logging.info("!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!\n\n")
             
             

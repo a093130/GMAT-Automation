@@ -168,22 +168,7 @@ class CModelSpec:
 
         except cfg.Ultima as u:
             logging.error('Call to modelspec failed. In %s, %s', u.source, u.message)
-            
-#        rege_comma = re.compile(',+')
-#        rege_utc = re.compile(' UTC')
-        
-#        for case in self.cases:
-#            """ Fix GMAT syntax incompatibilities and inconsistencies. 
-#            These edits here defeat the intent of factoring the GMAT
-#            resource dictionary into modelpov.py.  The value formatting
-#            ought to be performed in fromconfigsheet.py using the workbook table headings.
-#            
-#            """
-#            case['ReportFile1.Filename'] = str(case['ReportFile1.Filename'])
-#            case['EOTV.Epoch'] = str(rege_utc.sub('', case['EOTV.Epoch']))
-#            case['DefaultOrbitView.ViewPointVector'] = \
-#                rege_comma.sub('', repr(case['DefaultOrbitView.ViewPointVector']))
-        
+                   
         return self.cases
     
     def get_workbook(self):
@@ -272,8 +257,10 @@ class CModelWriter:
         self.inclname = 'Include_' + self.nameroot + '.script'
         """ Generated script filename """
 
-        self.reportname = 'Reports/'+ self.nameroot + '.csv'
-        """ GMAT requires an absolute path for the ReportFile output. """
+        self.reportname = 'Reports/'+ 'Report_' + self.nameroot + '.csv'
+        """ GMAT concatenates the value of the OUTPUT_PATH configuration variable
+        with the value of 'ReportFile1.Filename'. 
+        """
                 
         self.case['ReportFile1.Filename'] = "'" + str(self.reportname) + "'"
         self.case['EOTV.Id'] = "'" + str(self.case['EOTV.Id']) + "'"
@@ -286,8 +273,10 @@ class CModelWriter:
         
         if p.count('\\') > 1:
             self.modelpath = self.inclpath = p + 'Batch\\'
+            self.reportpath = p + 'Reports\\Report_' + self.nameroot + '.csv\n'
         else:
             self.modelpath = self.inclpath = p + 'Batch/'
+            self.reportpath = p + 'Reports/Report_' + self.nameroot + '.csv\n'
         
     def get_mission(self):
         """ Get the unique string at the root of all the generated filenames. """
@@ -307,6 +296,15 @@ class CModelWriter:
         
         return self.reportname
     
+    def get_reportpath(self):
+        """ This is the absolute path to the output reportfiles.
+        Note that the path format may differ from the 'ReportFile1.Filename'
+        attribute but will work with report_reduce.py
+        """
+        logging.debug('Method get_reportpath() called.')
+        
+        return self.reportpath
+
     def get_inclname(self):
         """ Get the saved model name """
         logging.debug('Method get_inclname() called.')
@@ -404,7 +402,8 @@ if __name__ == "__main__":
         """ Write out the include file """
     
     batchlist = []
-    """ This list will be written out to the batch file. """
+    reportlist = []
+    """ These lists will be written out to the runlist and reportlist batch files. """
     outrow = 0
     for mw in writer_list:
         """ Copy and rename the ModelMissionTemplate for each ModelWriter instance. """
@@ -429,6 +428,8 @@ if __name__ == "__main__":
 
 #FIX 02/08/2019       
         includp = mw.get_inclpath() + mw.get_inclname()
+
+        rptfile = mw.get_reportpath()
         
         try:                  
             with open(dst,'a+') as mmt:   
@@ -456,7 +457,10 @@ if __name__ == "__main__":
                 batchfile = str(dst) + '\n'
                 batchlist.append(batchfile)
                 """ GMAT will batch execute a list of the names of top-level models. """
-                            
+                
+                reportlist.append(rptfile)
+                """ Script reduce_report.py will summarize the contents of the named reports. """
+                
         except OSError as err:
             logging.error("OS error: ", err.strerror)
             sys.exit(-1)
@@ -465,22 +469,24 @@ if __name__ == "__main__":
             sys.exit(-1)
 
     batchfilename = \
-    o_path + mission_name + '_RunList_' + time.strftime('J%j_%H%M.%S', time.gmtime()) + '.batch'
+    o_path + 'RunList_' + time.strftime('J%j_%H%M.%S', time.gmtime()) + '.batch'
     """ Write out the batch file, containing the names of all the top level models. """
            
+    batchrptname = \
+    o_path + 'ReportList_' + time.strftime('J%j_%H%M.%S', time.gmtime()) + '.batch'
+    """ Write out the batch file, containing the names of all the top level models. """
+
     try:
         with open(batchfilename,'w') as bf:
             bf.writelines(batchlist)
-                
+            
+        with open(batchrptname,'w') as rf:
+            rf.writelines(reportlist)
+        
     except OSError as err:
         logging.error("OS error: {0}".format(err))
-        sys.exit(-1)
-    except ValueError:
-        logging.error("Could not append time to a filename %s.", batchfilename)
-        sys.exit(-1)
     except:
         logging.error("Unexpected error:\n", sys.exc_info())
-        sys.exit(-1)
     finally:
         logging.info('GMAT batch file creation is completed.')
         logging.shutdown()

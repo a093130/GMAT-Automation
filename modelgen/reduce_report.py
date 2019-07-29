@@ -32,10 +32,8 @@ import logging
 import traceback
 import getpass
 import csv
-#import xlwings as xwng
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
-#from pathlib import Path
 from gmatlocator import CGMATParticulars
 from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 
@@ -44,6 +42,8 @@ def lines_from_csv(csvfile):
     """
     logging.debug("Extracting lines from report file {0}".format(csvfile))
     
+    data = {}
+    
     try:
         regecr = re.compile('\r\n')
         regesp = re.compile(' ')
@@ -51,7 +51,7 @@ def lines_from_csv(csvfile):
         with open(csvfile, 'rt', newline='', encoding='utf8') as f:
             lines = list(f)
 
-            data = {}
+            
             for row, line in enumerate(lines):
                 
                 line = regesp.sub('', line)
@@ -59,15 +59,17 @@ def lines_from_csv(csvfile):
                 rlist = line.split(',')
                 
                 data.update({row: rlist})
-            return data
+                
+        return data
         
     except OSError as e:
         logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
+        
         return None
-
     except Exception as e:
         lines = traceback.format_exc().splitlines()
         logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+        
         return None
     
 def csv_to_xlsx(csvfile):
@@ -149,9 +151,11 @@ if __name__ == "__main__":
     logging.basicConfig(
             filename='./reduce_report.log',
             level=logging.INFO,
-            format='%(asctime)s %(filename)s %(levelname)s:\n%(message)s', datefmt='%d%B%Y_%H:%M:%S')
+            format='%(asctime)s %(filename)s \n %(message)s', 
+            datefmt='%d%B%Y_%H:%M:%S')
 
     logging.info("!!!!!!!!!! Reduce Report Execution Started !!!!!!!!!!")
+    
     host_attr = platform.uname()
     logging.info('User Id: %s\nNetwork Node: %s\nSystem: %s, %s, \nProcessor: %s', \
                  getpass.getuser(), \
@@ -174,14 +178,14 @@ if __name__ == "__main__":
     The Reports directory is assumed to be in this base path also.
     """
     sfname = 'ReportFile_Summary_' + time.strftime('J%j_%H%M%S',time.gmtime()) + '.xlsx'
+    mfname = 'MissingFiles_' + time.strftime('J%j_%H%M%S',time.gmtime()) + '.log'
     
     summaryfile = os.path.join(o_path, sfname)
+    missingreportsfile = os.path.join(o_path, mfname)
+    
     logging.info("Output summary file %s", summaryfile)
 
-    try:
-#        excel = xwng.App()
-#        excel.visible=False
-    
+    try:    
         xout = xwrt.Workbook(summaryfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
         """ Write summary to this file using XlWriter """
         
@@ -194,9 +198,9 @@ if __name__ == "__main__":
         
         sumsheet = xout.add_worksheet('Data')
         sumsheet.set_row(0, 15, cell_heading)
+
+        filesheet = xout.add_worksheet('Files')
                 
-        sumsheet.activate()
-        
         """ Above set outrow 0 with headings """
         
         with open(fname[0]) as f:
@@ -211,6 +215,16 @@ if __name__ == "__main__":
             trialpath = f.readline()
             f.seek(pos)            
             """ Need the first filename in order to determine number of columns for metadata. """
+
+            nrows = len(list(f))
+            f.seek(pos)
+            
+            progress = QProgressDialog("{0} Reports".format(nrows), "Cancel", 0, nrows)
+            progress.setWindowTitle('Summary of Reports')
+            progress.setValue(0)
+            progress.show()
+
+            qApp.processEvents()
             
             trialname = os.path.basename(trialpath)
             """Strip the path prefix. Do this again below for each file. """
@@ -219,18 +233,17 @@ if __name__ == "__main__":
             """ Get rid of the extension and split the basename into a list. 
             Number of elements in list gives the number of extra columns needed.
             """
-            skipcols = len(trialdata)
-            """ Number of elements """
+            skipcols = len(trialdata) - 1
                             
-            sumsheet.write('A1', 'Report File Name')
-            sumsheet.set_column(0, 0, len(trialname) + 4)
+            filesheet.write('A1', 'Report File Name', cell_heading)
+            filesheet.set_column(0, 0, len(trialname) + 4)
             
             col = 0
             """ Offset 1 column """
             for data in trialdata:
-                col += 1
                 sumsheet.write(0, col, 'Metadata')
                 sumsheet.set_column(col, col, len(data) + 4)
+                col += 1
                 
             sumsheet.set_column(1 + skipcols, 1 + skipcols, 14, format_2decplace)
             sumsheet.write(0, 1 + skipcols, 'Elapsed Days', cell_heading)
@@ -238,143 +251,106 @@ if __name__ == "__main__":
             sumsheet.set_column(2 + skipcols, 2 + skipcols, 6)
             sumsheet.write(0, 2 + skipcols, 'Revs' )    
             
-            sumsheet.set_column(3 + skipcols, 3 + skipcols, 14, format_2decplace)
-            sumsheet.write(0, 3 + skipcols, 'Rem. Fuel (kg)')
+            sumsheet.set_column(3 + skipcols, 3 + skipcols, 14)
+            sumsheet.write(0, 3 + skipcols, 'SMA (km)')
 
-            sumsheet.set_column(4 + skipcols, 4 + skipcols, 14)
-            sumsheet.write(0, 4 + skipcols, 'SMA (km)')
+            sumsheet.set_column(4 + skipcols, 4 + skipcols, 10, format_2decplace)
+            sumsheet.write(0, 4 + skipcols, 'INC (deg)', cell_heading)
 
             sumsheet.set_column(5 + skipcols, 5 + skipcols, 10, format_2decplace)
-            sumsheet.write(0, 5 + skipcols, 'INC (deg)', cell_heading)
+            sumsheet.write(0, 5 + skipcols, 'ECC', cell_heading)
 
-            sumsheet.set_column(6 + skipcols, 6 + skipcols, 10, format_2decplace)
-            sumsheet.write(0, 6 + skipcols, 'ECC', cell_heading)
+            sumsheet.set_column(6 + skipcols, 6 + skipcols, 14)
+            sumsheet.write(0, 6 + skipcols, 'Initial Fuel (kg)')
 
-            sumsheet.set_column(7 + skipcols, 7 + skipcols, 14)
-            sumsheet.write(0, 7 + skipcols, 'Initial Fuel (kg)')
+            sumsheet.set_column(7 + skipcols, 7 + skipcols, 14, format_2decplace)
+            sumsheet.write(0, 7 + skipcols, 'Rem. Fuel (kg)')
 
             sumsheet.set_column(8 + skipcols, 8 + skipcols, 14)
             sumsheet.write(0, 8 + skipcols, 'Fuel Used (kg)')
-            
-            nrows = len(list(f))
-            f.seek(pos)
-            
-            progress = QProgressDialog("Creating Summary ...", "Cancel", 0, nrows)
-            progress.setWindowTitle('Reduce Report')
-            progress.setValue(0)
-            progress.show()
-
-            qApp.processEvents()
-            
-            outrow = 0            
+                                    
+            outrow = 0  
+            missing_rows = []
             for filepath in f:                
                 """ Iterate through report files named in batch, outrow will start with the 
                 first row under the heading and count to the final row in sumsheet.
+                               
+                Use the XlWings module to read the xlsx source file.
                 
-                Convert the filepath from .csv to .xlsx format.
-                
-                Use the xlwings module to read the xlsx source file.
-                
-                Use XlWriter to write output in .xlsx format.  XLWriter offers significant
-                control over the Excel column and row formats.
+                Use XlWriter to write reduced output in .xlsx format.
                 """
-                rpt = os.path.normpath(filepath)
-                rege = re.compile('\n')
-                filepath = rege.sub('', rpt)
-                 
                 if progress.wasCanceled():
                     break
                 
                 outrow += 1
                 progress.setValue(outrow)
-                
-#                xlsxpath = csv_to_xlsx(str(filepath))
-#
-#                try:
-#                    wingbk = excel.books.open(xlsxpath)
-#                    """ Open xlxs workbook for reading using XlWings.
-#                    
-#                    There is a dependency on the source file, as implemented in accordance with 
-#                    the Include_StaticDefinitions.script model template file.
-#                                    
-#                    Source report file Col A, 'ElapsedDays', end range: write to column B of summary.
-#                    Source report file Col B, 'REV', end range: write to column C of summary.
-#                    Source report file Col C, 'FuelMass, end range': write to column D of summary.
-#                    Source report file Col D, 'SMA', end range: write to column E of summary.
-#                    Source report file Col E, 'INC', end range: write to column F of summary.
-#                    Source report file Col F, 'ECC', end range: write to column G of summary.
-#                    Source report file Cell C2, 'FuelMass': write to column H of summary.
-#                    (Column I will be written with a formula.)
-#                    """
-#
-#                    logging.debug("Opened Excel format report file {0}".format(xlsxpath))
-#                    
-#                except OSError as e:
-#                    logging.error("OS error {0}, unable to open file {1}".format(e.strerror, e.filename))
-#                    raise e
-#            
-#                except Exception as e:
-#                    lines = traceback.format_exc().splitlines()
-#                    logging.error("Exception opening workbook: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-#                    raise e
-#
-#                insheet = wingbk.sheets['Report']
-#                """ Name of sheet should be same as set in csv_to_xlsx(). """
-#                                                                                   
-#                days = insheet.range('A1').end('down').value
-#                revs = insheet.range('B1').end('down').value
-#                remfuel = insheet.range('C1').end('down').value
-#                sma = insheet.range('D1').end('down').value
-#                inc = insheet.range('E1').end('down').value
-#                ecc = insheet.range('F1').end('down').value
-#                
-#                inifuel = insheet.range('C2').value
-                
-                
-                datadict = lines_from_csv(filepath)
-                nrows = len(datadict)
-                
-                inifuel = datadict[1][2]
-                """ Key 0 gives the headings, key 1 is the first row of data. """
-                
-                datalist = datadict[nrows-1][0:6]                
-                """Last line: [elapsed_days, revs, remaining_fuel, sma, inc, ecc] """
-                
-                filename = os.path.basename(filepath)
-                """Strip the path prefix. """
 
-                basename = os.path.splitext(filename)[0]
-                metadata = basename.split('_')
-                """ Split the basename into a list of meta data. 
-                Write the metadata to the metasheet.
-                """
+
+                rpt = os.path.normpath(filepath)
+                rege = re.compile('\n')
+                filepath = rege.sub('', rpt)
+                """ It is necessary to remove the return. """
+
+                nrows = 0
+                if os.path.exists(filepath):
+                    datadict = lines_from_csv(filepath)
+                    """ Read the Report identified by filepath. """
+                    
+                    nrows = len(datadict)
                 
-                sumsheet.write(outrow, 0, filename)
-                
-                outcol = 1               
-                for data in metadata:                    
-                    sumsheet.write(outrow, outcol, data)
-                    outcol += 1
-                
-                for data in datalist:
-                    sumsheet.write(outrow, outcol, data)
-                    outcol += 1
-                
-                sumsheet.write(outrow, outcol, inifuel)
-                
-#                srcname = os.path.basename(xlsxpath)
-#                excel.books[srcname].close()
-                
-                fueldiff = \
-                '=' + xlut.xl_rowcol_to_cell(outrow, 7 + skipcols) + \
-                '-' + xlut.xl_rowcol_to_cell(outrow, 3 + skipcols)
+                    inifuel = datadict[1][2]
+                    """ Key 0 gives the headings, key 1 is the first row of data. """
+                    
+                    datalist = datadict[nrows-1][0:6]                
+                    """Last row: [elapsed_days, revs, remaining_fuel, sma, inc, ecc] """
+                    
+                    filename = os.path.basename(filepath)
+                    """Strip the path prefix. """
+    
+                    basename = os.path.splitext(filename)[0]
+
+                    metadata = basename.split('_')
+                    """ Split the basename into a list of meta data. 
+                    Write the metadata to the metasheet.
+                    """
+                    
+                    filesheet.write(outrow, 0, filename)
+                    
+                    outcol = 0               
+                    for data in metadata:                    
+                        sumsheet.write(outrow, outcol, data)
+                        outcol += 1
+                    
+                    for data in datalist:
+                        sumsheet.write(outrow, outcol, data)
+                        outcol += 1
+                    
+                    sumsheet.write(outrow, outcol, inifuel)
                                 
-                sumsheet.write_formula(outrow, outcol + 1, fueldiff)
+                    fueldiff = \
+                    '=' + xlut.xl_rowcol_to_cell(outrow, 6 + skipcols) + \
+                    '-' + xlut.xl_rowcol_to_cell(outrow, 7 + skipcols)
+                    """ Formula for Initial_Fuel - Remaining_Fuel """
+                                    
+                    sumsheet.write_formula(outrow, outcol + 1, fueldiff)
+                    
+                    logging.info("Completed extract from Excel report file {0}".format(filename))
+                    
+                else:
+                    filename = os.path.basename(filepath)
+                    missing_rows.append(filepath)
+                    logging.warning(\
+                    'Missing report file {0},  continuing.'.format(filepath))
+            
+            if len(missing_rows) > 0:
+                logging.warning('The missing reports file:\n{0}'.format(missingreportsfile))
+                with open(missingreportsfile, 'a+') as mrf:
+                    mrf.writelines(missing_rows)
+            
+            sumsheet.activate()
                 
-                logging.info("Completed extract from Excel report file {0}".format(filename))
-                
-            progress.setValue(nrows)
-
+            logging.info('!!!!!!!!!! Reduce Report Completed: processed {0} rows. !!!!!!!!!!'.format(nrows))
+                                                        
     except OSError as e:
         logging.error("OS error: %s for filename %s", e.strerror, e.filename)
 
