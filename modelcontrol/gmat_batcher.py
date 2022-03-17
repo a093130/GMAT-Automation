@@ -20,9 +20,13 @@ Created on Wed Feb  6 19:17:02 2019
     28 Feb 2019, Working Copy committed to Integration.
     01 Mar 2019, Multiprocessing Enhancement.
     03 Jun 2019, cleanup by quitting the Qt app.
+    31 July 2019, Added progress indicator using Manager.Queue. Updated cpto to 315.
                  
 """
+from __future__ import division
+""" Must be at the top of the file - maps features supported in future python versions """
 import os
+import sys
 import time
 import re
 import platform
@@ -34,12 +38,13 @@ import subprocess as sp
 from multiprocessing import Pool
 from multiprocessing import cpu_count
 from multiprocessing import Manager
-from PyQt5.QtWidgets import(QApplication, QFileDialog)
+from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 
-cpto = 300
-""" Child process timeout = 5 minutes: more than sufficient on dual 2.13GHz E5506 XEON, 
+cpto = 315
+""" Child process timeout = 5 minutes 15 secs: more than sufficient on dual 2.13GHz E5506 XEON, 
 16 Gbyte workstation with GTX 750 GPU. For the JS&R paper, run1 07/25/2019, a maximum GMAT run
-time of 294 seconds was recorded for Batch_64HET6342W_36000.0kg_22Sep2020_R6.13_51.6deg_-0.832_J206_235431.script
+time of 294 seconds was recorded for Batch_64HET6342W_36000.0kg_22Sep2020_R6.13_51.6deg_-0.832_J206_235431.script.
+Change 31 Jul 2019: Was cpto = 300, Is cpto = 315.
 """
 rsrv_cpus = 2
 """ Reserve 2 cores for system processes and services (daemons). Spikes on process context swap. """
@@ -60,6 +65,8 @@ def run_gmat(args):
     delay_run()
     
     q = args[1]
+    """ Output Queue """
+    
     scriptname = os.path.basename(args[0])
         
     try:
@@ -82,7 +89,7 @@ def run_gmat(args):
         communicate() to be certain.
         """
         outs = outs.decode('UTF-8')
-        message = 'PID: {0}'.format(pid) + filter_outs(outs, scriptname)
+        message = 'From PID: {0} '.format(pid) + filter_outs(outs, scriptname)
         q.put(message)
                               
     except sp.TimeoutExpired as e:
@@ -91,7 +98,7 @@ def run_gmat(args):
         to the child process.  Logging must be done in the parent process.
         """
         q.put("GMAT: Timeout Expired, File: %s" % scriptname)
-                    
+                            
     except sp.CalledProcessError as e:       
         q.put("GMAT: Called ProcessError, File: %s" % scriptname)  
     
@@ -109,7 +116,7 @@ def run_gmat(args):
         q.put(message)
         
         proc.terminate()
-        """ Was 'proc.kill()' but terminate() is better on Windows. """        
+        """ Was 'proc.kill()' but proc.terminate() is better on Windows. """        
  
 def filter_outs(outs:str, id:str):
     """ Reduce the logging size of the gmat output message.
@@ -152,6 +159,7 @@ if __name__ == "__main__":
                  host_attr.processor)
     
     QApp = QApplication([])
+    QApp.processEvents()
     
     fname = QFileDialog().getOpenFileName(None, 'Open master batch file.', 
                        os.getenv('USERPROFILE'))
@@ -168,10 +176,14 @@ if __name__ == "__main__":
     
     mgr = Manager()
     task_queue = mgr.Queue()
+    stat_queue = mgr.Queue()
+    
+    print('Please wait, setting up jobs in {0}.'.format(os.path.basename(fname[0])))
     
     try:
         with open(fname[0]) as f:
             """ This is the master batch file selected in QtFileDialog. """
+            numjobs = 0
             for filename in f:
                 """ It must be cleaned up for GMAT to recognize it. """
                 gmat_arg = os.path.normpath(filename)
@@ -182,18 +194,43 @@ if __name__ == "__main__":
                 scriptname = os.path.basename(filename)
                 
                 gmat_args.append([gmat_arg, task_queue])
-                                      
+                
+                numjobs += 1
+                        
+        progress = QProgressDialog("{0} Jobs ...".format(numjobs), "Cancel", 0, numjobs)
+        progress.setWindowTitle('Executing Batch')
+        progress.setValue(0)
+#        progress.show()
+                                  
         pool = Pool(processes=nrunp, maxtasksperchild=20)
         """ In the single process execution of GMAT it was found that the process would
         timeout after a max of 20 processes.
         """
-        results = pool.map(run_gmat, gmat_args, chunksize=ninstances)
         
-        while 1:
+        """ Multi-processing Progress Bar. See, 
+        https://stackoverflow.com/questions/5666576/show-the-progress-of-a-python-multiprocessing-pool-map-call
+        by jfs, note further comment about difference between map and imap by simonmacmullen.
+        """
+        progress_ctr = 0
+        for rs, _ in enumerate(pool.imap_unordered(run_gmat, gmat_args, 1)):
+            """ rs is an instance of class multiprocessing.pool.AsyncResult """
+            
+            progress_ctr = rs + 1
+#           The Qt progress counter does not update. Needs to be modeless.
+#           https://stackoverflow.com/questions/38309803/pyqt-non-modal-dialog-always-modal
+#            progress.setValue(progress_ctr)
+
+            print('Completed {0} of {1} tasks.'.format(progress_ctr, numjobs))
+        
+        pool.close()
+        
+        print('Reading Job output queue, finishing up.')
+        
+        while(True):           
             qout = task_queue.get(cpto)
-            
-            logging.info('Process Queue: {0}'.format(qout))
-            
+#            
+            logging.info('GMAT reports: {0}'.format(qout))
+#                        
             if task_queue.qsize() < 1:
                 break
         
@@ -217,9 +254,9 @@ if __name__ == "__main__":
         logging.error("Exception: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
                             
     finally:
-        #pool.close()
         QApp.quit()
         logging.info("!!!!!!!!!! GMAT Batch Execution Completed !!!!!!!!!!\n\n")
+        sys.exit()
             
             
             
