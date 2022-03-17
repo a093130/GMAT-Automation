@@ -1,14 +1,21 @@
 #! python
 # -*- coding: utf-8 -*-
 """
-Created on Sat Oct 20 09:53:28 2018
+@file fromconfigsheet.py
+
+
+@remarks:
+    Created on Sat Oct 20 09:53:28 2018
+    08 Jan 2019, [CCH] initial baseline
+    30 Apr 2019, [CCH] Flow Costates and payload mass through to model from worksheet.
 
 @author: Colin Helms
 
-@Description:
+@brief:
     This module reads configurations from the "Vehicle Optimization Tables" workbook 
     and returns a corresponding specification of various cases of GMAT model resources.
-    
+ 
+@Description
     Interface Agreement:
     An Excel workbook exists which contains a sheet named "GMAT" having a
     contiguous table starting in cell "A1".  The table consists of a first line
@@ -44,10 +51,6 @@ Created on Sat Oct 20 09:53:28 2018
         Tables" workbook.  The QFileDialog() from PyQt may be used to browse for the
         workbook file.
     
-@change log:
-    08 Jan 2019, initial baseline
-    30 Apr 2019, Flow Costates and payload mass through to model from worksheet.
-
 """
 import os
 import re
