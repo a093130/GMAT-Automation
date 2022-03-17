@@ -304,6 +304,12 @@ if __name__ == "__main__":
                     datalist = datadict[nrows-1][0:6]                
                     """Last row: [elapsed_days, revs, remaining_fuel, sma, inc, ecc] """
                     
+                    fuel = datalist[2]
+                    del datalist[2]
+                    datalist.append(inifuel)
+                    datalist.append(fuel)
+                    """ Move data for used fuel calc to end of list. """
+                    
                     filename = os.path.basename(filepath)
                     """Strip the path prefix. """
     
@@ -324,26 +330,24 @@ if __name__ == "__main__":
                     for data in datalist:
                         sumsheet.write(outrow, outcol, data)
                         outcol += 1
-                    
-                    sumsheet.write(outrow, outcol, inifuel)
-                                
+                                                    
                     fueldiff = \
                     '=' + xlut.xl_rowcol_to_cell(outrow, 6 + skipcols) + \
                     '-' + xlut.xl_rowcol_to_cell(outrow, 7 + skipcols)
                     """ Formula for Initial_Fuel - Remaining_Fuel """
                                     
-                    sumsheet.write_formula(outrow, outcol + 1, fueldiff)
+                    sumsheet.write_formula(outrow, outcol, fueldiff)
                     
                     logging.info("Completed extract from Excel report file {0}".format(filename))
                     
                 else:
                     filename = os.path.basename(filepath)
-                    missing_rows.append(filepath)
+                    missing_rows.append(filepath + '\n')
                     logging.warning(\
-                    'Missing report file {0},  continuing.'.format(filepath))
+                    'Missing report, {0},  continuing.'.format(filepath))
             
             if len(missing_rows) > 0:
-                logging.warning('The missing reports file:\n{0}'.format(missingreportsfile))
+                logging.warning('Missing reports log: {0}'.format(missingreportsfile))
                 with open(missingreportsfile, 'a+') as mrf:
                     mrf.writelines(missing_rows)
             
