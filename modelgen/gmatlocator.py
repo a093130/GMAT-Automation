@@ -11,7 +11,7 @@ Created on Tue Apr 30 16:20:54 2019
     
 @Change Log:
     30 Apr 2019, refactored from gmat_batcher.py.
-    26 May 2019, Factor in CGMATParticulars from modelgen.py. Used by reducereport, modelgen.
+    26 May 2019, Include CGMATParticulars from modelgen.py. Used by reducereport, modelgen.
 """
 import os
 import sys
@@ -21,7 +21,7 @@ from pathlib import Path
 
 class CGmatPath:
     """ This class initializes its instance with the GMAT root path using the 
-    'LOCALAPPDATA' environment variable.  
+        'LOCALAPPDATA' environment variable.  
     """
     def __init__(self):
         logging.debug('Instance of class GMAT_Path constructed.')

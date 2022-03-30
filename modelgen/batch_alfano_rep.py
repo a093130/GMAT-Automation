@@ -23,6 +23,7 @@ https://docs.xlwings.org/en/stable/license.html
    
 @Change Log:
     08 Mar 2019, initial baseline
+    22 Mar 2022, Factored out main to allow generic use of reduce_report
 """
 import os
 import time
@@ -31,114 +32,13 @@ import platform
 import logging
 import traceback
 import getpass
-import csv
+#import csv
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
+from reduce_report import lines_from_csv
+from reduce_report import csv_to_xlsx
 from gmatlocator import CGMATParticulars
 from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
-
-def lines_from_csv(csvfile):
-    """ Read a .csv formatted file, return a dictionary with row as key and list of lines as elements.
-    """
-    logging.debug("Extracting lines from report file {0}".format(csvfile))
-    
-    data = {}
-    
-    try:
-        regecr = re.compile('\r\n')
-        regesp = re.compile(' ')
-    
-        with open(csvfile, 'rt', newline='', encoding='utf8') as f:
-            lines = list(f)
-
-            
-            for row, line in enumerate(lines):
-                
-                line = regesp.sub('', line)
-                line = regecr.sub('', line)
-                rlist = line.split(',')
-                
-                data.update({row: rlist})
-                
-        return data
-        
-    except OSError as e:
-        logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
-        
-        return None
-    except Exception as e:
-        lines = traceback.format_exc().splitlines()
-        logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        
-        return None
-    
-def csv_to_xlsx(csvfile):
-    """ Read a .csv formatted file, write it to .xlsx formatted file of the same basename. Return the written
-    filename.
-    
-    Reference Stack Overflow: 
-    https://stackoverflow.com/questions/17684610/python-convert-csv-to-xlsx
-    with important comments from:
-    https://stackoverflow.com/users/235415/ethan
-    https://stackoverflow.com/users/596841/pookie
-    
-    Beware when data has embedded comma.
-    """
-    logging.debug("Converting report file {0}".format(csvfile))
-    
-    xlfile = csvfile[:-4] + '.xlsx'
-    
-    wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
-    """ Slice the .csv suffix, append .xlsx suffix, open a new workbook under this name. 
-    It seems inefficient to create a .xlsx copy of the .csv file, but the Excel copy is used for
-    analysis of data items not included in the summary, e.g. thrust and beta angle history.
-    """
-    
-    sheet = wb.add_worksheet('Report')
-    
-    sheet.set_column('A:A', 14)
-    sheet.set_column('B:B', 6)
-    sheet.set_column('C:C', 14)
-    sheet.set_column('D:D', 14)
-    sheet.set_column('E:E', 14)
-    sheet.set_column('F:F', 24)
-    sheet.set_column('G:G', 24)
-    sheet.set_column('H:H', 24)
-    sheet.set_column('I:I', 24)
-    sheet.set_column('J:J', 24)
-    sheet.set_column('K:K', 24)
-    sheet.set_column('L:L', 6)
-    sheet.set_column('M:M', 14)
-    sheet.set_column('N:N', 14)
-    sheet.set_column('O:O', 14)
-    sheet.set_column('P:P', 14)
-        
-    #sheet.set_selection('C2')
-    
-    sheet.split_panes('C2')
-
-    try:
-    
-        with open(csvfile, 'rt', newline='', encoding='utf8') as f:
-            reader = csv.reader(f, quoting=csv.QUOTE_NONE)
-            
-            for r, row in enumerate(reader):
-                for c, col in enumerate(row):
-                    sheet.write(r, c, col)   
-
-        return xlfile
-
-    except OSError as e:
-        logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
-        return None
-
-    except Exception as e:
-        lines = traceback.format_exc().splitlines()
-        logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        return None
-    
-    finally:
-        wb.close()
 
 if __name__ == "__main__":
     """ Retrieve the formatting batch file, open and format each .csv file listed """
@@ -149,12 +49,12 @@ if __name__ == "__main__":
     python-multiprocessing-error-attributeerror-module-main-has-no-attribute
     """
     logging.basicConfig(
-            filename='./reduce_report.log',
+            filename='./batch_alfano_rep.log',
             level=logging.INFO,
             format='%(asctime)s %(filename)s \n %(message)s', 
             datefmt='%d%B%Y_%H:%M:%S')
 
-    logging.info("!!!!!!!!!! Reduce Report Execution Started !!!!!!!!!!")
+    logging.info("!!!!!!!!!! Alfano Batch Report Execution Started !!!!!!!!!!")
     
     host_attr = platform.uname()
     logging.info('User Id: %s\nNetwork Node: %s\nSystem: %s, %s, \nProcessor: %s', \
@@ -166,7 +66,7 @@ if __name__ == "__main__":
     
     qApp = QApplication([])
     
-    fname = QFileDialog().getOpenFileName(None, 'Open report batch file.', 
+    fname = QFileDialog().getOpenFileName(None, 'Open autogenerated report batch file.', 
                        os.getenv('USERPROFILE'),
                        filter='Batch files(*.batch)')
 

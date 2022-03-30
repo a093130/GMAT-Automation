@@ -3,7 +3,7 @@
 """
 Created on Fri Mar  8 22:36:55 2019
 
-@author: colin helms
+@author: colinhelms@outlook.com
 
 @Description:  Sequentially opens .csv formatted GMAT ReportFiles, 
 copies pertinent cells and rows into an .xlsx formatted summary file. 
@@ -16,14 +16,17 @@ The file name is split upon the '_' separator and each element is written
 to the Summary file as 'metadata'.  This permits arbitrary description or parameterization
 to be encoded in the file name and carried forward to the summary file.
 
-@Copyright: Copyright (C) 2019 Freelance Rocket Science, All rights reserved.
+@Copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 
 XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
 https://docs.xlwings.org/en/stable/license.html
    
 @Change Log:
     08 Mar 2019, initial baseline
+    17 Mar 2022, Re-factor to support different report formats.
+    18 Mar 2022, Make unit test generic.
 """
+from genericpath import isfile
 import os
 import time
 import re
@@ -32,28 +35,189 @@ import logging
 import traceback
 import getpass
 import csv
+from pathlib import Path
+from pathlib import PurePath
+import datetime as dt
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
 from gmatlocator import CGMATParticulars
+import CleanUpData
+import CleanUpReports
+import ContactReports
 from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 
+dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
+            'd mmm yyyy hh:mm:ss.000',
+            r'^\d\d\s[A-S][a-z]+\s\d\d\d\d\s\d\d:\d\d:\d\d.\d\d\d',
+            r'%d %b %Y %H:%M:%S.%f']}
+""" Dictionary containing specific GMAT date time formats.
+    Used for converting datetime strings written to Excel to UT1 dates and then displaying the numerical date in GMAT format using Excel.
+    Element is List of date string, Excel cell number format, regular expression syntax, and datetime library format string parameter.
+"""
+
+def timetag():
+    """ Snapshot a time tag string"""
+    return(time.strftime('J%j_%H%M%S',time.gmtime()))
+    
+def newfilename(pathname, suffix='.txt', keyword=None):
+    """ Utility function for a file path operation often done.
+        pathname: string representing unix or windows path convention to a file.
+        keyword: string to be appended to filename
+        suffix.
+    """
+    filepath = PurePath(pathname)
+    filename = filepath.stem
+
+    if keyword:
+        newfilename = filename + keyword + suffix
+    else:
+        newfilename = filename + suffix
+
+    filepath = filepath.parents[0]
+
+    return(filepath/newfilename)
+
+
+def decimate_spaces(filename):
+    """ Read a text file with multiple space delimiters, decimate the spaces and substitute commas.
+        Do not replace single spaces, as these are in the time format.
+    """
+    logging.debug("Decimating spaces in {0}".format(filename))
+
+    rege2spc = re.compile(' [ ]+')
+    regeoddspc = re.compile(',[ ]+')
+    regecr = re.compile('\s')
+
+    fixedlns = []
+
+    try:
+        with open(filename, 'r') as fin:
+            lines = list(fin)
+
+            for r, line in enumerate(lines):
+                if regecr.match(line) == None:
+                    line = rege2spc.sub(',', line)
+                    line = regeoddspc.sub('', line)
+
+                    ''' It is better to make a new list than to insert into lines.'''
+                    fixedlns.append(line)
+                else:
+                    """ Skip non-printable lines. """
+                    continue
+                        
+    except OSError as e:
+        logging.error("OS error #1in decimate_spaces(): %s reading filename %s", e.strerror, e.filename)
+        
+        return None
+        
+    except Exception as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error("File read exception #1 in decimate_spaces(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+        
+        return None
+
+    filename = newfilename(filename, '.txt', '+nospc')
+    ''' Make new filename, don't overwrite the original file.
+        The batch procedure splits filenames on '_' so we use '+' instead.
+    '''
+
+    try:
+        """ Write cleaned up lines to new filename. """
+        with open(filename, 'w+') as fout:
+            for row, line in enumerate(fixedlns):
+                fout.write(line)
+
+    except OSError as e:
+        logging.error("OS error #2 in decimate_spaces(): %s writing clean data %s", e.strerror, e.filename)
+        
+        return None
+        
+    except Exception as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error("Clean data write exception #2 in decimate_spaces(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+        
+        return None
+
+    return(filename)
+
+def decimate_commas(filename):
+    """ Read a malformed csv file, which contains empty fields. Decimate commas. Write a clean file.
+        Return the clean filename so that this function can be used as a parameter in 
+        lines_from_csv(csvfile).
+    """
+    logging.debug("Decimating commas in {0}".format(filename))
+
+    fixedlns = []
+
+    regecom = re.compile('[,]+')
+    regeolcom = re.compile(',$')
+
+    try:
+        with open(filename, 'r') as fin:
+            lines = list(fin)
+
+            for row, line in enumerate(lines):
+                if line.isprintable:
+                    line = regecom.sub(',', line)
+                    line = regeolcom.sub('', line)
+
+                    ''' It is better to make a new list than to insert into lines.'''
+                    fixedlns.append(line)
+                else:
+                    """ Skip non-printable lines. """
+                    continue
+
+    except OSError as e:
+        logging.error("OS error #1 in decimate_commas(): %s reading filename %s", e.strerror, e.filename)
+        
+        return None
+        
+    except Exception as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error("File read exception #1 in decimate_commas(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+        
+        return None
+
+    filename = newfilename(filename, '.csv', '+reduced')
+    ''' Make new filename, don't overwrite the original file.
+        The batch procedure splits filenames on '_' so we use '+' instead.
+    '''
+
+    try:
+        with open(filename, 'w+') as fout:
+            """ Write cleaned up lines to new filename. """
+            for row, line in enumerate(fixedlns):
+                fout.write(line)
+
+        return(filename)
+
+    except OSError as e:
+        logging.error("OS error #2 in decimate_commas(): %s writing clean data to filename %s", e.strerror, e.filename)
+        
+        return None
+        
+    except Exception as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error("Clean data write exception #2 in decimate_commas(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+        
+        return None
+
 def lines_from_csv(csvfile):
-    """ Read a .csv formatted file, return a dictionary with row as key and list of lines as elements.
+    """ Read a well-formed .csv file, or one which contains intentional empty fields. 
+        Return a dictionary with row as key and list of lines as elements.
     """
     logging.debug("Extracting lines from report file {0}".format(csvfile))
     
     data = {}
     
     try:
-        regecr = re.compile('\r\n')
+        regecr = re.compile('\s')
         regesp = re.compile(' ')
-    
+
         with open(csvfile, 'rt', newline='', encoding='utf8') as f:
             lines = list(f)
 
-            
             for row, line in enumerate(lines):
-                
                 line = regesp.sub('', line)
                 line = regecr.sub('', line)
                 rlist = line.split(',')
@@ -63,70 +227,87 @@ def lines_from_csv(csvfile):
         return data
         
     except OSError as e:
-        logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
-        
-        return None
+        logging.error("OS error in lines_from_csv(): %s for filename %s", e.strerror, e.filename)
+
     except Exception as e:
         lines = traceback.format_exc().splitlines()
-        logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        
-        return None
-    
+        logging.error("Exception in lines_from_csv(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+   
 def csv_to_xlsx(csvfile):
-    """ Read a .csv formatted file, write it to .xlsx formatted file of the same basename. Return the written
-    filename.
-    
-    Reference Stack Overflow: 
-    https://stackoverflow.com/questions/17684610/python-convert-csv-to-xlsx
-    with important comments from:
-    https://stackoverflow.com/users/235415/ethan
-    https://stackoverflow.com/users/596841/pookie
-    
-    Beware when data has embedded comma.
+    """ Read a .csv formatted file, write it to .xlsx formatted file of the same basename. 
+        Return the writtenfilename.
+        Reference Stack Overflow: 
+        https://stackoverflow.com/questions/17684610/python-convert-csv-to-xlsx
+        with important comments from:
+        https://stackoverflow.com/users/235415/ethan
+        https://stackoverflow.com/users/596841/pookie
     """
     logging.debug("Converting report file {0}".format(csvfile))
-    
-    xlfile = csvfile[:-4] + '.xlsx'
-    
-    wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
-    """ Slice the .csv suffix, append .xlsx suffix, open a new workbook under this name. 
-    It seems inefficient to create a .xlsx copy of the .csv file, but the Excel copy is used for
-    analysis of data items not included in the summary, e.g. thrust and beta angle history.
-    """
-    
-    sheet = wb.add_worksheet('Report')
-    
-    sheet.set_column('A:A', 14)
-    sheet.set_column('B:B', 6)
-    sheet.set_column('C:C', 14)
-    sheet.set_column('D:D', 14)
-    sheet.set_column('E:E', 14)
-    sheet.set_column('F:F', 24)
-    sheet.set_column('G:G', 24)
-    sheet.set_column('H:H', 24)
-    sheet.set_column('I:I', 24)
-    sheet.set_column('J:J', 24)
-    sheet.set_column('K:K', 24)
-    sheet.set_column('L:L', 6)
-    sheet.set_column('M:M', 14)
-    sheet.set_column('N:N', 14)
-    sheet.set_column('O:O', 14)
-    sheet.set_column('P:P', 14)
-        
-    #sheet.set_selection('C2')
-    
-    sheet.split_panes('C2')
 
+    fname = (csvfile.stem).split('+')[0]
+    """Get rid of the 'nospc' and 'reduced' keywords."""
+    xlfile = newfilename(csvfile.parents[0]/fname, '.xlsx')
+    """Slice the .csv suffix, append .xlsx suffix, open a new workbook under this name."""
+
+    wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
+
+    cell_heading = wb.add_format({'bold': True})
+    cell_heading.set_align('center')
+    cell_heading.set_align('vcenter')
+    cell_heading.set_text_wrap()
+
+    cell_wrap = wb.add_format({'text_wrap': True})
+    cell_wrap.set_align('vcenter')
+
+    cell_4plnum = wb.add_format({'num_format': '0.0000'})
+    cell_4plnum.set_align('vcenter')
+
+    cell_datetime = wb.add_format({'num_format': dtdict['GMAT1'][1]})
+    cell_datetime.set_align('vcenter')
+    sheet = wb.add_worksheet('Report')
+
+    regedot = re.compile('\.')
+    regecaps = re.compile('[A-Z]')
+              
     try:
-    
         with open(csvfile, 'rt', newline='', encoding='utf8') as f:
             reader = csv.reader(f, quoting=csv.QUOTE_NONE)
-            
-            for r, row in enumerate(reader):
-                for c, col in enumerate(row):
-                    sheet.write(r, c, col)   
 
-        return xlfile
+            lengs = []
+
+            for row, line in enumerate(reader):
+                for col, data in enumerate(line):
+                    leng = len(data) + 1
+
+                    if len(lengs) < col+1:
+                        lengs.append(leng)
+                    else:
+                        lengs[col] = leng
+
+                    if row == 0:
+                        data = regedot.sub(' ', data)
+                        """ GMAT uses a lengthy dot notation in headings. We want these to wrap gracefully."""
+                        matchcap = regecaps.match(data)
+                        sheet.write(row, col, data, cell_wrap)
+                    else:
+                        """ Set the width of each column for widest data. """
+                        if row >= 1: 
+                            sheet.set_column(col, col, leng)
+                        
+                        """ Detect date-time string, a specific re format must be matched, uses dtdict."""
+                        if re.search(dtdict['GMAT1'][2], data):
+
+                            gmat_date = dt.datetime.strptime(data, dtdict['GMAT1'][3])
+
+                            sheet.write(row, col, gmat_date, cell_datetime)
+                        else:
+                            """ Workbook is initialized to treat strings that look like numbers as numbers.
+                                Defer application specific number formatting.
+                            """
+                            sheet.write(row, col, data)
+
+        sheet.freeze_panes('A2')
+        return str(xlfile)
 
     except OSError as e:
         logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
@@ -141,7 +322,6 @@ def csv_to_xlsx(csvfile):
         wb.close()
 
 if __name__ == "__main__":
-    """ Retrieve the formatting batch file, open and format each .csv file listed """
     __spec__ = None
     """ Necessary tweak to get Spyder IPython to execute this code. 
     See:
@@ -164,206 +344,58 @@ if __name__ == "__main__":
                  host_attr.version, \
                  host_attr.processor)
     
-    qApp = QApplication([])
-    
-    fname = QFileDialog().getOpenFileName(None, 'Open report batch file.', 
-                       os.getenv('USERPROFILE'),
-                       filter='Batch files(*.batch)')
+ 
+    xlreport = CleanUpReports()
+    dataonly = CleanUpData()
+    batchrep = CleanUpReports()
 
-    logging.info('Report batch file is %s', fname[0])
-    
     gmat_paths = CGMATParticulars()
     o_path = gmat_paths.get_output_path()
-    """ Get the GMAT script path for the summary file.  Put it with the script. 
-    The Reports directory is assumed to be in this base path also.
-    """
-    sfname = 'ReportFile_Summary_' + time.strftime('J%j_%H%M%S',time.gmtime()) + '.xlsx'
-    mfname = 'MissingFiles_' + time.strftime('J%j_%H%M%S',time.gmtime()) + '.log'
+    """ o_path is an instance of Path that locates the GMAT output directory. """
+
+    qApp = QApplication([])
     
-    summaryfile = os.path.join(o_path, sfname)
-    missingreportsfile = os.path.join(o_path, mfname)
-    
-    logging.info("Output summary file %s", summaryfile)
+    fname = QFileDialog().getOpenFileName(None, 'Open REPORT File. NOT BATCH!', 
+                    o_path,
+                    filter='text files(*.txt *.csv)')
 
-    try:    
-        xout = xwrt.Workbook(summaryfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
-        """ Write summary to this file using XlWriter """
-        
-        cell_heading = xout.add_format({'bold': True})
-        cell_heading.set_align('center')
-        cell_heading.set_align('vcenter')
-         
-        format_2decplace = xout.add_format()
-        format_2decplace.set_num_format('0.00')
-        
-        sumsheet = xout.add_worksheet('Data')
-        sumsheet.set_row(0, 15, cell_heading)
+    logging.info('Input report file is %s', fname[0])
 
-        filesheet = xout.add_worksheet('Files')
-                
-        """ Above set outrow 0 with headings """
-        
-        with open(fname[0]) as f:
-            """ Open the master batch file selected in QtFileDialog. 
-            This file should contain a line by line list of file paths to
-            .csv report files generated by GMAT.
-            
-            It is necessary to convert .csv files to .xlsx files, with care to ensure
-            strings read are written as numbers.  Use the csv module for this. 
-            """
-            pos = f.tell()
-            trialpath = f.readline()
-            f.seek(pos)            
-            """ Need the first filename in order to determine number of columns for metadata. """
+    fbatch = QFileDialog().getOpenFileName(None, 'Open BATCH file.', 
+                    o_path,
+                    filter='Batch files(*.batch)')
 
-            nrows = len(list(f))
-            f.seek(pos)
-            
-            progress = QProgressDialog("{0} Reports".format(nrows), "Cancel", 0, nrows)
-            progress.setWindowTitle('Summary of Reports')
-            progress.setValue(0)
-            progress.show()
+    logging.info('Report batch file is %s', fbatch[0])
 
-            qApp.processEvents()
-            
-            trialname = os.path.basename(trialpath)
-            """Strip the path prefix. Do this again below for each file. """
+    try:
+        """ Test Cases. Demonstrates a complete, three-step toolchain.
+            Input should be a GMAT Tab delimited Contact File, but shouldn't fail in any case.
+            Output files are located in the same path as the original.
+        """ 
+        """ Test Cases 1: Run through the toolchain to create an Excel File. """
+        newfile = xlreport.extend(fname[0])
 
-            trialdata = (os.path.splitext(trialname)[0]).split('_')
-            """ Get rid of the extension and split the basename into a list. 
-            Number of elements in list gives the number of extra columns needed.
-            """
-            skipcols = len(trialdata) - 1
-                            
-            filesheet.write('A1', 'Report File Name', cell_heading)
-            filesheet.set_column(0, 0, len(trialname) + 4)
-            
-            col = 0
-            """ Offset 1 column """
-            for data in trialdata:
-                sumsheet.write(0, col, 'Metadata')
-                sumsheet.set_column(col, col, len(data) + 4)
-                col += 1
-                
-            sumsheet.set_column(1 + skipcols, 1 + skipcols, 14, format_2decplace)
-            sumsheet.write(0, 1 + skipcols, 'Elapsed Days', cell_heading)
-            
-            sumsheet.set_column(2 + skipcols, 2 + skipcols, 6)
-            sumsheet.write(0, 2 + skipcols, 'Revs' )    
-            
-            sumsheet.set_column(3 + skipcols, 3 + skipcols, 14)
-            sumsheet.write(0, 3 + skipcols, 'SMA (km)')
+        logging.info('Test Case 1: cleaned Excel file is %s', newfile)
+        print('Test Case 1: cleaned Excel file is %s', newfile)
 
-            sumsheet.set_column(4 + skipcols, 4 + skipcols, 10, format_2decplace)
-            sumsheet.write(0, 4 + skipcols, 'INC (deg)', cell_heading)
+        """ Test Case 2: Read the same csv file and return a data dictionary instead."""
+        dataonly.extend(fname[0])
 
-            sumsheet.set_column(5 + skipcols, 5 + skipcols, 10, format_2decplace)
-            sumsheet.write(0, 5 + skipcols, 'ECC', cell_heading)
+        logging.info("Test Case 2: First Row of data: \n\t{0}".format(dataonly.data[0]))
+        print("Test Case 2: First Row of data: \n{0}".format(dataonly.data[0]))
 
-            sumsheet.set_column(6 + skipcols, 6 + skipcols, 14)
-            sumsheet.write(0, 6 + skipcols, 'Initial Fuel (kg)')
+        """ Test Case 3: Batch Processing of .txt report files. """
+        batchrep.do_batch(fbatch[0])
 
-            sumsheet.set_column(7 + skipcols, 7 + skipcols, 14, format_2decplace)
-            sumsheet.write(0, 7 + skipcols, 'Rem. Fuel (kg)')
+        logging.info("Test Case 3: First file written: {0}".format(batchrep.filelist[0]))
+        print("Test Case 3: First file written: {0}".format(batchrep.filelist[0]))
 
-            sumsheet.set_column(8 + skipcols, 8 + skipcols, 14)
-            sumsheet.write(0, 8 + skipcols, 'Fuel Used (kg)')
-                                    
-            outrow = 0  
-            missing_rows = []
-            for filepath in f:                
-                """ Iterate through report files named in batch, outrow will start with the 
-                first row under the heading and count to the final row in sumsheet.
-                               
-                Use the XlWings module to read the xlsx source file.
-                
-                Use XlWriter to write reduced output in .xlsx format.
-                """
-                if progress.wasCanceled():
-                    break
-                
-                outrow += 1
-                progress.setValue(outrow)
-
-
-                rpt = os.path.normpath(filepath)
-                rege = re.compile('\n')
-                filepath = rege.sub('', rpt)
-                """ It is necessary to remove the return. """
-
-                nrows = 0
-                if os.path.exists(filepath):
-                    datadict = lines_from_csv(filepath)
-                    """ Read the Report identified by filepath. """
-                    
-                    nrows = len(datadict)
-                
-                    inifuel = datadict[1][2]
-                    """ Key 0 gives the headings, key 1 is the first row of data. """
-                    
-                    datalist = datadict[nrows-1][0:6]                
-                    """Last row: [elapsed_days, revs, remaining_fuel, sma, inc, ecc] """
-                    
-                    fuel = datalist[2]
-                    del datalist[2]
-                    datalist.append(inifuel)
-                    datalist.append(fuel)
-                    """ Move data for used fuel calc to end of list. """
-                    
-                    filename = os.path.basename(filepath)
-                    """Strip the path prefix. """
-    
-                    basename = os.path.splitext(filename)[0]
-
-                    metadata = basename.split('_')
-                    """ Split the basename into a list of meta data. 
-                    Write the metadata to the metasheet.
-                    """
-                    
-                    filesheet.write(outrow, 0, filename)
-                    
-                    outcol = 0               
-                    for data in metadata:                    
-                        sumsheet.write(outrow, outcol, data)
-                        outcol += 1
-                    
-                    for data in datalist:
-                        sumsheet.write(outrow, outcol, data)
-                        outcol += 1
-                                                    
-                    fueldiff = \
-                    '=' + xlut.xl_rowcol_to_cell(outrow, 6 + skipcols) + \
-                    '-' + xlut.xl_rowcol_to_cell(outrow, 7 + skipcols)
-                    """ Formula for Initial_Fuel - Remaining_Fuel """
-                                    
-                    sumsheet.write_formula(outrow, outcol, fueldiff)
-                    
-                    logging.info("Completed extract from Excel report file {0}".format(filename))
-                    
-                else:
-                    filename = os.path.basename(filepath)
-                    missing_rows.append(filepath + '\n')
-                    logging.warning(\
-                    'Missing report, {0},  continuing.'.format(filepath))
-            
-            if len(missing_rows) > 0:
-                logging.warning('Missing reports log: {0}'.format(missingreportsfile))
-                with open(missingreportsfile, 'a+') as mrf:
-                    mrf.writelines(missing_rows)
-            
-            sumsheet.activate()
-                
-            logging.info('!!!!!!!!!! Reduce Report Completed: processed {0} rows. !!!!!!!!!!'.format(nrows))
-                                                        
-    except OSError as e:
-        logging.error("OS error: %s for filename %s", e.strerror, e.filename)
+        print("All Test Cases completed successfully.")
 
     except Exception as e:
         lines = traceback.format_exc().splitlines()
-        logging.error("Exception: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+        logging.error("Test Case failed with exception: %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
     
     finally:
-        progress.hide()
         qApp.quit()
-        xout.close()
     

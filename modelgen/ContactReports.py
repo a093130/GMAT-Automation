@@ -5,19 +5,16 @@ Created on Fri Mar  8 22:36:55 2019
 
 @author: colinhelms@outlook.com
 
-@description:  Executes programs in batch mode to reduce data.
+@description:  module container for class definition ContactReports.
 
-Do the minimum processing to write a clean Excel workbook for each csv file
-in the batch.
 
 @Copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 
 XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
 https://docs.xlwings.org/en/stable/license.html
    
-@Change Log:
+@changes:
     08 Mar 2019, initial baseline
-    18 MAR 2022, refactored __main__ into new procedure specifically for batches of GMAT Contact Reports.
 """
 import os
 import time
@@ -32,19 +29,22 @@ import xlsxwriter.utility as xlut
 from pathlib import Path
 from pathlib import PurePath
 from gmatlocator import CGMATParticulars
-from reduce_report import CleanUpData
-from reduce_report import CleanUpReports
+import CleanUpData
+import CleanUpReports
 from reduce_report import dtdict
+import reduce_report as rr
 from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 
-class CombineReports(CleanUpData):
+class ContactReports(CleanUpData):
     """" Application specialization to form one combined report. """
     def __init__(self):
         self.filelist = {}
 
     def extend(self, rpt):
         """ Call parent class do_batch() and the CombineReports.extend function will be called.
-            This version of extend will identify the report type and call the appropriate methods.
+            This specialization of extend will build a dictionar to identify the report type 
+            and call specialized methods to build a contact report by combining GMAT data
+            which supports link budget and camera Field of View (FOV) calculations in Excel.
         """
         regetarget = re.compile('Target: ')
         regeobsrvr = re.compile('Observer: ')
@@ -54,33 +54,97 @@ class CombineReports(CleanUpData):
         regetime = re.compile(dtdict['GMAT1'][2])
         """ Regular Expression Match patterns to identify files data items. """
 
-        datadict = CleanUpData.extend(rpt)
-        for k, v in datadict.items:
-            """ Classify what type of file this is. """
-            mtarg = regetarget.match(v[0])
-            mobsv = regeobsrvr.match(v[0])
-            mevts = regenumevt.match(v[0])
-            satn = regesatnum.match(v[0])
-            headg = regeheading.match(v[0])
-            ttg = regetime.match(v[0])
+        nospc = rr.decimate_spaces(rpt)
+        nospc = Path(nospc)
+
+        reduced = rr.decimate_commas(nospc)
+        if nospc.exists():
+            nospc.unlink()
+
+        fname = (csvfile.stem).split('+')[0]
+    """Get rid of the 'nospc' and 'reduced' keywords."""
+    xlfile = newfilename(csvfile.parents[0]/fname, '.xlsx')
+    """Slice the .csv suffix, append .xlsx suffix, open a new workbook under this name."""
+
+    wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
+    """  
+    It may seem inefficient to create a .xlsx copy of the .csv file, but the Excel copy may be used for
+    analysis of data items not included in the summary, e.g. thrust and beta angle history.
+    """
+    cell_heading = wb.add_format({'bold': True})
+    cell_heading.set_align('center')
+    cell_heading.set_align('vcenter')
+    cell_heading.set_text_wrap()
+
+    cell_wrap = wb.add_format({'text_wrap': True})
+    cell_wrap.set_align('vcenter')
+
+    cell_4plnum = wb.add_format({'num_format': '0.0000'})
+    cell_4plnum.set_align('vcenter')
+
+    cell_datetime = wb.add_format({'num_format': dtdict['GMAT1'][1]})
+    cell_datetime.set_align('vcenter')
+    
+    sheet = wb.add_worksheet('Report')
+
+        try:
+            with open(reduced, 'rt', newline='', encoding='utf8') as f:
+                reader = csv.reader(f, quoting=csv.QUOTE_NONE)
+
+                lengs = []
+
+                for row, line in enumerate(reader):
+                    for col, data in enumerate(line):
+                        leng = len(data) + 1
+
+                        if len(lengs) < col+1:
+                            lengs.append(leng)
+                        else:
+                            lengs[col] = leng
+
+                        if row == 0:
+                            data = regedot.sub(' ', data)
+                            """ GMAT uses a lengthy dot notation in headings. We want these to wrap gracefully. """
+                            sheet.write(row, col, data, cell_wrap)
+                        else:
+                            """ Set the width of each column for widest data. """
+                            if row >= 1: 
+                                sheet.set_column(col, col, leng)
+                            
+                            """ Detect date-time string, a specific re format must be matched, uses dtdict. """
+                            if re.search(dtdict['GMAT1'][2], data):
+
+                                gmat_date = dt.datetime.strptime(data, dtdict['GMAT1'][3])
+
+                                sheet.write(row, col, gmat_date, cell_datetime)
+                            else:
+                                """ Workbook is initialized to treat strings that look like numbers as numbers.
+                                    Defer application specific number formatting.
+                                """
+                                sheet.write(row, col, data)
+
+            #sheet.freeze_panes('A2') #This is too specific and should be deferred
+            return str(xlfile)
+
+        except OSError as e:
+            logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
+            return None
+
+        except Exception as e:
+            lines = traceback.format_exc().splitlines()
+            logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+            return None
+        
+    finally:
+        wb.close()
             
             if mtarg:
                 """ This is a SIGHT Report """
                 
-            elif mobsv:
-                """ This is a SIGHT Report """
-
-            elif mevts:
-                """ This is a SIGHT Report """
 
             elif satn:
                 """ This is a Link Report """
 
-            elif headg:
-                """ This is a Link Report"""
-
-            elif ttg:
-                """ This is a Link Report"""
 
             else:
                 """ Blank line or unknown type"""
