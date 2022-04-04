@@ -52,6 +52,7 @@ class ContactReports(CleanUpData):
         regeheading = re.compile('Start Time')
         regesatnum = re.compile('LEOsat')
         regetime = re.compile(dtdict['GMAT1'][2])
+        regedot = re.compile('\.')
         """ Regular Expression Match patterns to identify files data items. """
 
         nospc = rr.decimate_spaces(rpt)
@@ -61,31 +62,31 @@ class ContactReports(CleanUpData):
         if nospc.exists():
             nospc.unlink()
 
-        fname = (csvfile.stem).split('+')[0]
-    """Get rid of the 'nospc' and 'reduced' keywords."""
-    xlfile = newfilename(csvfile.parents[0]/fname, '.xlsx')
-    """Slice the .csv suffix, append .xlsx suffix, open a new workbook under this name."""
+        fname = (rpt.stem).split('+')[0]
+        """Get rid of the 'nospc' and 'reduced' keywords."""
+        xlfile = rr.newfilename(rpt.parents[0]/fname, '.xlsx')
+        """Slice the .csv suffix, append .xlsx suffix, open a new workbook under this name."""
 
-    wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
-    """  
-    It may seem inefficient to create a .xlsx copy of the .csv file, but the Excel copy may be used for
-    analysis of data items not included in the summary, e.g. thrust and beta angle history.
-    """
-    cell_heading = wb.add_format({'bold': True})
-    cell_heading.set_align('center')
-    cell_heading.set_align('vcenter')
-    cell_heading.set_text_wrap()
+        wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
+        """  
+        It may seem inefficient to create a .xlsx copy of the .csv file, but the Excel copy may be used for
+        analysis of data items not included in the summary, e.g. thrust and beta angle history.
+        """
+        cell_heading = wb.add_format({'bold': True})
+        cell_heading.set_align('center')
+        cell_heading.set_align('vcenter')
+        cell_heading.set_text_wrap()
 
-    cell_wrap = wb.add_format({'text_wrap': True})
-    cell_wrap.set_align('vcenter')
+        cell_wrap = wb.add_format({'text_wrap': True})
+        cell_wrap.set_align('vcenter')
 
-    cell_4plnum = wb.add_format({'num_format': '0.0000'})
-    cell_4plnum.set_align('vcenter')
+        cell_4plnum = wb.add_format({'num_format': '0.0000'})
+        cell_4plnum.set_align('vcenter')
 
-    cell_datetime = wb.add_format({'num_format': dtdict['GMAT1'][1]})
-    cell_datetime.set_align('vcenter')
-    
-    sheet = wb.add_worksheet('Report')
+        cell_datetime = wb.add_format({'num_format': dtdict['GMAT1'][1]})
+        cell_datetime.set_align('vcenter')
+        
+        sheet = wb.add_worksheet('Report')
 
         try:
             with open(reduced, 'rt', newline='', encoding='utf8') as f:
@@ -105,8 +106,27 @@ class ContactReports(CleanUpData):
                         if row == 0:
                             data = regedot.sub(' ', data)
                             """ GMAT uses a lengthy dot notation in headings. We want these to wrap gracefully. """
+ 
+                            #m = re.search('[A-Z]', data)
+                            """ TODO Find the caps and insert a space."""
+
                             sheet.write(row, col, data, cell_wrap)
+
+                            if regetarget.match():
+                                """ This  is a SIGHT Report """
+                                rptype = 1
+
+                            elif regeobsrvr.match():
+                                """ This is a Link Report """
+                                rptype = 2
+
+                            else:
+                                """ Blank line or unknown type"""
+                                rptype = 0                           
                         else:
+                            """Format report data rows by case. """
+                            
+
                             """ Set the width of each column for widest data. """
                             if row >= 1: 
                                 sheet.set_column(col, col, leng)
@@ -123,9 +143,8 @@ class ContactReports(CleanUpData):
                                 """
                                 sheet.write(row, col, data)
 
-            #sheet.freeze_panes('A2') #This is too specific and should be deferred
-            return str(xlfile)
-
+            sheet.freeze_panes('A2')
+               
         except OSError as e:
             logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
             return None
@@ -134,22 +153,10 @@ class ContactReports(CleanUpData):
             lines = traceback.format_exc().splitlines()
             logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
             return None
-        
-    finally:
-        wb.close()
-            
-            if mtarg:
-                """ This is a SIGHT Report """
                 
-
-            elif satn:
-                """ This is a Link Report """
-
-
-            else:
-                """ Blank line or unknown type"""
-                pass
-
+        finally:
+            wb.close()
+ 
                 
                 
                 
