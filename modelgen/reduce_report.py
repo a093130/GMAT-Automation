@@ -1,20 +1,10 @@
 #! Python
 # -*- coding: utf-8 -*-
 """
-Created on Fri Mar  8 22:36:55 2019
+@Description:  Sequentially opens .csv formatted GMAT ReportFiles, removes whitespace 
+copies pertinent rows and comma delimited fields into an .xlsx file.
 
 @author: colinhelms@outlook.com
-
-@Description:  Sequentially opens .csv formatted GMAT ReportFiles, 
-copies pertinent cells and rows into an .xlsx formatted summary file. 
-Also incorporates a difference formula in last column, which is fuel residual (or shortage).
-
-The .csv source files are formatted and saved as .xlsx files, which support subsequent
-engineering use.
-
-The file name is split upon the '_' separator and each element is written
-to the Summary file as 'metadata'.  This permits arbitrary description or parameterization
-to be encoded in the file name and carried forward to the summary file.
 
 @Copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 
@@ -22,9 +12,9 @@ XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
 https://docs.xlwings.org/en/stable/license.html
    
 @Change Log:
-    08 Mar 2019, initial baseline
+    Created on Fri Mar 8 2019
     17 Mar 2022, Re-factor to support different report formats.
-    18 Mar 2022, Make unit test generic.
+    29 Mar 2022, Modify Unit Tests to execute derived classes.
 """
 from genericpath import isfile
 import os
@@ -41,9 +31,6 @@ import datetime as dt
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
 from gmatlocator import CGMATParticulars
-import CleanUpData
-import CleanUpReports
-import ContactReports
 from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 
 dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
@@ -54,6 +41,15 @@ dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
     Used for converting datetime strings written to Excel to UT1 dates and then displaying the numerical date in GMAT format using Excel.
     Element is List of date string, Excel cell number format, regular expression syntax, and datetime library format string parameter.
 """
+
+""" Regular expressions that are used in common. """
+regedot = re.compile(r'\.')
+regecr = re.compile(r'\s')
+regesp = re.compile(' ')
+regecom = re.compile(r'[,]+')
+regecamel = re.compile(r'(?<=[a-z])[A-Z]')
+regedecimal = re.compile(r'-*[0-9]+\.[0-9]+')
+regetime = re.compile(dtdict['GMAT1'][2])
 
 def timetag():
     """ Snapshot a time tag string"""
@@ -77,6 +73,45 @@ def newfilename(pathname, suffix='.txt', keyword=None):
 
     return(filepath/newfilename)
 
+def heading_row(data):
+    """ Eliminate extraneous characters and break strings on caps.
+
+        Obviously this function should be called for the heading row only,
+        which is usually row 0.
+
+        Returns the formatted data and max count of characters.
+    """
+
+    data = regedot.sub(' ', data)
+    """ Eliminate dot notation. """
+    try:
+
+        miter = regecamel.finditer(data)
+        """ Break on camel case. """
+        if miter:
+            mlist = list()
+            for m in miter:
+                """ Unfortunately miter is not reversible, so form a list. """
+                mlist.append(m)
+            
+            for m in reversed(mlist):
+                """ Find the caps position and insert a space. 
+                    Uses built-in function reversed() because a space added at the left 
+                    causes rightward positions to increment.
+                """
+                capspos = m.span()[0]
+                data = data[0:capspos] + ' ' + data[capspos:len(data)]
+            
+            counts = list()
+            for item in data.split(' '):
+                counts.append(len(item))
+            
+        return data, max(counts)
+
+    except Exception as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error('Exception %s in heading_row():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
+        print('Exception', e.__doc__, ' heading_row():\n', lines[0], '\n', lines[1], '\n', lines[-1])
 
 def decimate_spaces(filename):
     """ Read a text file with multiple space delimiters, decimate the spaces and substitute commas.
@@ -84,12 +119,10 @@ def decimate_spaces(filename):
     """
     logging.debug("Decimating spaces in {0}".format(filename))
 
-    rege2spc = re.compile(' [ ]+')
-    regeoddspc = re.compile(',[ ]+')
-    regecr = re.compile('\s')
+    regeoddspc = re.compile(r',[ ]+')
+    rege2spc = re.compile(r' [ ]+')
 
     fixedlns = []
-
     try:
         with open(filename, 'r') as fin:
             lines = list(fin)
@@ -104,41 +137,27 @@ def decimate_spaces(filename):
                 else:
                     """ Skip non-printable lines. """
                     continue
-                        
-    except OSError as e:
-        logging.error("OS error #1in decimate_spaces(): %s reading filename %s", e.strerror, e.filename)
-        
-        return None
-        
-    except Exception as e:
-        lines = traceback.format_exc().splitlines()
-        logging.error("File read exception #1 in decimate_spaces(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        
-        return None
 
-    filename = newfilename(filename, '.txt', '+nospc')
-    ''' Make new filename, don't overwrite the original file.
-        The batch procedure splits filenames on '_' so we use '+' instead.
-    '''
+        filename = newfilename(filename, '.txt', '+nospc')
+        ''' Make new filename, don't overwrite the original file.
+            The batch procedure splits filenames on '_' so we use '+' instead.
+        '''
 
-    try:
         """ Write cleaned up lines to new filename. """
         with open(filename, 'w+') as fout:
             for row, line in enumerate(fixedlns):
                 fout.write(line)
 
+        return(filename)
+
     except OSError as e:
-        logging.error("OS error #2 in decimate_spaces(): %s writing clean data %s", e.strerror, e.filename)
-        
-        return None
+        logging.error("OS error in decimate_spaces(): %s writing clean data %s", e.strerror, e.filename)
+        print('OS error',  e.strerror, ' in decimate_spaces() for filename', e.filename)
         
     except Exception as e:
         lines = traceback.format_exc().splitlines()
-        logging.error("Clean data write exception #2 in decimate_spaces(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        
-        return None
-
-    return(filename)
+        logging.error('Exception %s in decimate_commas():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
+        print('Exception', e.__doc__, ' decimate_spaces():\n', lines[0], '\n', lines[1], '\n', lines[-1])
 
 def decimate_commas(filename):
     """ Read a malformed csv file, which contains empty fields. Decimate commas. Write a clean file.
@@ -149,7 +168,6 @@ def decimate_commas(filename):
 
     fixedlns = []
 
-    regecom = re.compile('[,]+')
     regeolcom = re.compile(',$')
 
     try:
@@ -167,23 +185,11 @@ def decimate_commas(filename):
                     """ Skip non-printable lines. """
                     continue
 
-    except OSError as e:
-        logging.error("OS error #1 in decimate_commas(): %s reading filename %s", e.strerror, e.filename)
-        
-        return None
-        
-    except Exception as e:
-        lines = traceback.format_exc().splitlines()
-        logging.error("File read exception #1 in decimate_commas(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        
-        return None
+        filename = newfilename(filename, '.csv', '+reduced')
+        ''' Make new filename, don't overwrite the original file.
+            The batch procedure splits filenames on '_' so we use '+' instead.
+        '''
 
-    filename = newfilename(filename, '.csv', '+reduced')
-    ''' Make new filename, don't overwrite the original file.
-        The batch procedure splits filenames on '_' so we use '+' instead.
-    '''
-
-    try:
         with open(filename, 'w+') as fout:
             """ Write cleaned up lines to new filename. """
             for row, line in enumerate(fixedlns):
@@ -192,15 +198,13 @@ def decimate_commas(filename):
         return(filename)
 
     except OSError as e:
-        logging.error("OS error #2 in decimate_commas(): %s writing clean data to filename %s", e.strerror, e.filename)
-        
-        return None
+        logging.error("OS error in decimate_commas(): %s writing clean data to filename %s", e.strerror, e.filename)
+        print('OS error',  e.strerror, 'decimate_commas() for filename', e.filename)
         
     except Exception as e:
         lines = traceback.format_exc().splitlines()
-        logging.error("Clean data write exception #2 in decimate_commas(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        
-        return None
+        logging.error('Exception %s in decimate_commas():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
+        print('Exception', e.__doc__, ' in decimate_commas():\n', lines[0], '\n', lines[1], '\n', lines[-1])       
 
 def lines_from_csv(csvfile):
     """ Read a well-formed .csv file, or one which contains intentional empty fields. 
@@ -209,11 +213,7 @@ def lines_from_csv(csvfile):
     logging.debug("Extracting lines from report file {0}".format(csvfile))
     
     data = {}
-    
     try:
-        regecr = re.compile('\s')
-        regesp = re.compile(' ')
-
         with open(csvfile, 'rt', newline='', encoding='utf8') as f:
             lines = list(f)
 
@@ -228,11 +228,14 @@ def lines_from_csv(csvfile):
         
     except OSError as e:
         logging.error("OS error in lines_from_csv(): %s for filename %s", e.strerror, e.filename)
+        print('OS error',  e.strerror, 'lines_from_csv() for filename', e.filename)
 
     except Exception as e:
         lines = traceback.format_exc().splitlines()
-        logging.error("Exception in lines_from_csv(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
+        logging.error('Exception %s in lines_from_csv():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
+        print('Exception ', e.__doc__, ' in lines_from_csv():\n', lines[0], '\n', lines[1], '\n', lines[-1])
    
+
 def csv_to_xlsx(csvfile):
     """ Read a .csv formatted file, write it to .xlsx formatted file of the same basename. 
         Return the writtenfilename.
@@ -262,68 +265,80 @@ def csv_to_xlsx(csvfile):
     cell_4plnum = wb.add_format({'num_format': '0.0000'})
     cell_4plnum.set_align('vcenter')
 
+    cell_2plnum = wb.add_format({'num_format': '0.00'})
+    cell_2plnum.set_align('vcenter')
+
     cell_datetime = wb.add_format({'num_format': dtdict['GMAT1'][1]})
     cell_datetime.set_align('vcenter')
     sheet = wb.add_worksheet('Report')
 
-    regedot = re.compile('\.')
-    regecaps = re.compile('[A-Z]')
-              
     try:
         with open(csvfile, 'rt', newline='', encoding='utf8') as f:
             reader = csv.reader(f, quoting=csv.QUOTE_NONE)
 
-            lengs = []
-
+            lengs = list()
             for row, line in enumerate(reader):
                 for col, data in enumerate(line):
-                    leng = len(data) + 1
-
-                    if len(lengs) < col+1:
-                        lengs.append(leng)
-                    else:
-                        lengs[col] = leng
-
                     if row == 0:
-                        data = regedot.sub(' ', data)
-                        """ GMAT uses a lengthy dot notation in headings. We want these to wrap gracefully."""
-                        matchcap = regecaps.match(data)
-                        sheet.write(row, col, data, cell_wrap)
-                    else:
-                        """ Set the width of each column for widest data. """
-                        if row >= 1: 
-                            sheet.set_column(col, col, leng)
-                        
-                        """ Detect date-time string, a specific re format must be matched, uses dtdict."""
-                        if re.search(dtdict['GMAT1'][2], data):
+                        data, leng = heading_row(data) # New factorization, fixes squeezed column issue.
 
+                        lengs.append(leng)
+                        """ Row 0, lengs list is empty. """
+
+                        sheet.set_column(col, col, leng)
+                        """ Column width of row 0 is set to fit longest word in wrapped heading. """
+                        sheet.write(row, col, data, cell_wrap)
+                    else: # all subsequent rows
+                        leng = len(data) + 1
+
+                        if len(lengs) < col + 1:
+                            """ There is no element of lengs corresponding to the (zero based) column. """
+                            lengs.append(leng)
+                        elif leng > lengs[col]:
+                            """ Only update the column width if current data is longer than previous. """
+                            lengs[col] = leng
+
+                            sheet.set_column(col, col, leng)
+
+                        if regetime.search(data):
+                            """ Detect and convert date-time string to date-time value. """
                             gmat_date = dt.datetime.strptime(data, dtdict['GMAT1'][3])
 
                             sheet.write(row, col, gmat_date, cell_datetime)
-                        else:
-                            """ Workbook is initialized to treat strings that look like numbers as numbers.
-                                Defer application specific number formatting.
-                            """
-                            sheet.write(row, col, data)
+                        elif regedecimal.search(data):
+                            """ Detect a decimal number.  Note that string.isdecimal() does not work. """
 
-        sheet.freeze_panes('A2')
+                            if regedot.search(data):
+                                modrem = data.split('.')
+                                fracsz = len(modrem[1])
+
+                            if fracsz < 4:
+                                
+                                sheet.write(row, col, data, cell_2plnum)
+                            else:
+                                sheet.write(row, col, data, cell_4plnum)
+                            """ Prevent columns from being too narrow when number is reformatted"""
+
+                        else:
+                            sheet.write(row, col, data)
         return str(xlfile)
 
     except OSError as e:
         logging.error("OS error in csv_to_xlsx(): %s for filename %s", e.strerror, e.filename)
-        return None
+        print('OS error',  e.strerror, 'in csv_to_xlsx() for filename', e.filename)
 
     except Exception as e:
         lines = traceback.format_exc().splitlines()
-        logging.error("Exceptionin csv_to_xlsx(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-        return None
+        logging.error('Exception %s in csv_to_xlsx():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
+        print('Exception ', e.__doc__, ' in csv_to_xlsx():\n', lines[0], '\n', lines[1], '\n', lines[-1])
     
     finally:
         wb.close()
 
 if __name__ == "__main__":
+    """ Unit Tests for module. """
     __spec__ = None
-    """ Necessary tweak to get Spyder IPython to execute this code. 
+    """ Necessary tweak to get Spyder IPython to execute this code.
     See:
     https://stackoverflow.com/questions/45720153/
     python-multiprocessing-error-attributeerror-module-main-has-no-attribute
@@ -344,10 +359,6 @@ if __name__ == "__main__":
                  host_attr.version, \
                  host_attr.processor)
     
- 
-    xlreport = CleanUpReports()
-    dataonly = CleanUpData()
-    batchrep = CleanUpReports()
 
     gmat_paths = CGMATParticulars()
     o_path = gmat_paths.get_output_path()
@@ -361,36 +372,50 @@ if __name__ == "__main__":
 
     logging.info('Input report file is %s', fname[0])
 
-    fbatch = QFileDialog().getOpenFileName(None, 'Open BATCH file.', 
-                    o_path,
-                    filter='Batch files(*.batch)')
+    try:
+        """ Test Case 1: Run through the toolchain to create an Excel File. """
+        nospc = decimate_spaces(fname[0])
+        reduced = decimate_commas(nospc)
+        xlfile = csv_to_xlsx(reduced)
 
-    logging.info('Report batch file is %s', fbatch[0])
+        nospc = Path(nospc)
+        if nospc.exists():
+            nospc.unlink()
+
+        reduced = Path(reduced)
+        if reduced.exists():
+            reduced.unlink()
+    
+        logging.info('Cleaned up file: %s.', str(xlfile))
+
+    except OSError as e:
+        logging.error("OS error: %s for filename %s", e.strerror, e.filename)
+        print('OS error',  e.strerror, 'for filename', e.filename)
+    except Exception as e:
+        lines = traceback.format_exc().splitlines()
+        logging.error('Exception %s:\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
+        print('Exception ', e.__doc__, ':\n', lines[0], '\n', lines[1], '\n', lines[-1])
+ 
+    logging.info('Test Case 1: cleaned Excel file is %s', xlfile)
+    print('Test Case 1: cleaned Excel file is %s', xlfile)
 
     try:
-        """ Test Cases. Demonstrates a complete, three-step toolchain.
-            Input should be a GMAT Tab delimited Contact File, but shouldn't fail in any case.
-            Output files are located in the same path as the original.
-        """ 
-        """ Test Cases 1: Run through the toolchain to create an Excel File. """
-        newfile = xlreport.extend(fname[0])
-
-        logging.info('Test Case 1: cleaned Excel file is %s', newfile)
-        print('Test Case 1: cleaned Excel file is %s', newfile)
-
         """ Test Case 2: Read the same csv file and return a data dictionary instead."""
-        dataonly.extend(fname[0])
+        nospc = decimate_spaces(fname[0])
+        reduced = decimate_commas(nospc)
+        data = lines_from_csv(reduced)
+        
+        nospc = Path(nospc)
 
-        logging.info("Test Case 2: First Row of data: \n\t{0}".format(dataonly.data[0]))
-        print("Test Case 2: First Row of data: \n{0}".format(dataonly.data[0]))
+        if nospc.exists():
+            nospc.unlink()
 
-        """ Test Case 3: Batch Processing of .txt report files. """
-        batchrep.do_batch(fbatch[0])
+        reduced = Path(reduced)
+        if reduced.exists():
+            reduced.unlink()
 
-        logging.info("Test Case 3: First file written: {0}".format(batchrep.filelist[0]))
-        print("Test Case 3: First file written: {0}".format(batchrep.filelist[0]))
-
-        print("All Test Cases completed successfully.")
+        logging.info("Test Case 2: First Row of data: \n\t{0}".format(data[0]))
+        print("Test Case 2: First Row of data: \n{0}".format(data[0]))
 
     except Exception as e:
         lines = traceback.format_exc().splitlines()
