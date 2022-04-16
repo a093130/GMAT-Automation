@@ -32,29 +32,20 @@ class CLinkReports(CCleanUpReports):
         Collection Planning FOV calculations.
     """
     def __init__(self, **args):
-        self.links = {}
-        """ This is used by the instance to capture the Observer satellite and Target location."""
         super().__init__(**args)
 
-    def do_batch(self, batchfile, **args):
-        """Call parent class do_batch() but the LinkReports.extend function should be called. """
-
-        super().do_batch(batchfile, **args)
-        """ Delegate up the MRO chain.
-            See: https://stackoverflow.com/questions/32014260
-            See: https://rhettinger.wordpress.com/2011/05/26/super-considered-super
-        """
+        self.links = {}
+        """ This is used by the instance to capture the Observer satellite and Target location."""
+        return
 
     def extend(self, rpt):
-        """ This specialization of extend will build a dictionary to identify the report type 
-            and call specialized methods to build a contact report by combining GMAT data
-            which supports link budget and camera Field of View (FOV) calculations in Excel.
+        """ This specialization of extend() provides specialized methods to format 
+            a Link Report. 
         """
         regegregor = re.compile('A1Gregorian')
         regesatnum = re.compile('LEOsat')
         regeaoi = re.compile(' X')
         regespch = re.compile(' [A-Z]+')
-
         """ Regular Expression Match patterns to identify files data items. """
 
         nospc = rr.decimate_spaces(rpt)
@@ -93,7 +84,9 @@ class CLinkReports(CCleanUpReports):
         cell_datetime.set_align('vcenter')
         
         sheet = wb.add_worksheet('Report')
-
+        """ The presence of the GMAT output report in a tab named 'Report' is a
+            Mandatory Interface agreement.
+        """
         try:
             with open(reduced, 'rt', newline='', encoding='utf8') as f:
                 reader = csv.reader(f, quoting=csv.QUOTE_NONE)
@@ -110,9 +103,8 @@ class CLinkReports(CCleanUpReports):
                                 data, leng = rr.heading_row(data)
                                 
                                 lengs.append(leng)
-
                                 sheet.set_column(col, col, leng)
-                                
+
                                 if col == 0:
                                     if regegregor.search(data):
                                         """ Find and record the satellite number. """
@@ -122,7 +114,7 @@ class CLinkReports(CCleanUpReports):
                                             key1 = rr.regesp.sub('',key1)
                                     else:
                                         """ Column 0 must match 'A1Gregorian' - incompatible report format. """
-                                        raise  ValueError('Report file row 0 col 0 is incompatible with expected heading.')
+                                        raise  ValueError('{0}, row 0 col 0 is incompatible with expected heading.'.format(reduced.name()))
 
                                 ematch = regeaoi.search(data)
                                 """ The span of this match object will identify the end of the AOI string. """
@@ -135,7 +127,7 @@ class CLinkReports(CCleanUpReports):
                                     self.links.update({str(key1 +'@'+ key2):xlfile})
                                     """ Keep track of files written, by compound key of satellite and AOI. """
                                     
-                                sheet.write(row, col, data, cell_wrap)
+                                sheet.write(row, col, data, cell_heading)
                                 
                             else: # all subsequent rows
                                 """ Format report data rows. """
@@ -179,20 +171,22 @@ class CLinkReports(CCleanUpReports):
 
             if reduced.exists():
                 reduced.unlink()
+            
+            return
 
         except OSError as e:
             logging.error('%s in LinkReports extend(): %s in filename %s', e.__doc__, e.strerror, e.filename)
             print(e.__doc__,' in LinkReports extend(): ', e.strerror, ' in filename ', e.filename)
 
         except ValueError as e:
-            logging.error("%s for rpt value %s", e.strerror, rpt.name)
-            print(e.strerror,'for rpt value: ',  rpt.name)
+            logging.error('%s A1Gregorian heading not found.', e.args[0])
+            print(e.args[0],' A1Gregorian heading not found.')
 
         except Exception as e:
             lines = traceback.format_exc().splitlines()
             logging.error("Exception in LinkReports extend(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
             print('Exception in LinkReports extend(): ', e.__doc__, '\n', lines[0],'\n', lines[-1])
-                
+             
         finally:
             wb.close()
         
@@ -225,7 +219,6 @@ if __name__ == "__main__":
                  host_attr.system, \
                  host_attr.version, \
                  host_attr.processor)
-    
 
     gmat_paths = CGMATParticulars()
     o_path = gmat_paths.get_output_path()

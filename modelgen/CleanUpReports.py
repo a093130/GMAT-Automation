@@ -24,8 +24,9 @@ class CCleanUpReports:
         writes a clean Excel file.  Designed for specialization through overload of the extend function.
     """
     def __init__(self, **args):
-        self.filelist = []
         super().__init__(**args)
+        self.filelist = []
+        return
 
     def do_batch(self, batchfile, **args):
         """ Open the master 'batchfile'.
@@ -53,7 +54,8 @@ class CCleanUpReports:
 
                     if rpt.exists() & rpt.is_file():
                         self.extend(rpt)
-                        """ Do not assume any return type. """                        
+                        """ Do not assume any return type. """                       
+            return
 
         except OSError as e:
             logging.error("OS error: %s for filename %s", e.strerror, e.filename)
@@ -92,6 +94,8 @@ class CCleanUpReports:
             logging.info('CleanUpReports extend() completed for filename: %s.', xlfile)
             print ('CleanUpReports extend() completed  for filename:', xlfile.name)
 
+            return
+
         except OSError as e:
             logging.error("OS error: %s for filename %s", e.strerror, e.filename)
             print('OS error: ', e.strerror,' in CleanUpReports extend() for filename ', e.filename)
@@ -100,6 +104,7 @@ class CCleanUpReports:
             lines = traceback.format_exc().splitlines()
             logging.error("Exception: %s\n%s\n%s\n%s", e.__doc__, lines[0], lines[1], lines[-1])
             print('Exception in CleanUpReports extend(): ', e.__doc__, '\n', lines[0], '\n', lines[1],'\n', lines[-1])
+
 
 if __name__ == "__main__":
     """ Unit Tests for module. """

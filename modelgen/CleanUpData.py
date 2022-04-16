@@ -29,6 +29,7 @@ class CCleanUpData(CCleanUpReports): # syntax is module.class.
 
     def __init__(self, **args):
         super().__init__(**args)
+        return
 
 
     def do_batch(self, batchfile, **args):
@@ -39,6 +40,7 @@ class CCleanUpData(CCleanUpReports): # syntax is module.class.
             See: https://stackoverflow.com/questions/32014260
             See: https://rhettinger.wordpress.com/2011/05/26/super-considered-super
         """
+        return
 
     def extend(self, rpt):
         try:
@@ -58,6 +60,8 @@ class CCleanUpData(CCleanUpReports): # syntax is module.class.
 
             self.work_on(data)
 
+            return
+
         except OSError as e:
             logging.error("OS error: %s for filename %s", e.strerror, e.filename)
             print('OS error',  e.strerror, ' for filename', e.filename)
@@ -76,6 +80,8 @@ class CCleanUpData(CCleanUpReports): # syntax is module.class.
                 print('size of dictionary:', len(linedict))
             else:
                 print('Invalid parameter, is not Dictionary. Type of parameter is ', linedict.__class__)
+
+            return
 
         except OSError as e:
             logging.error("OS error: %s for filename %s", e.strerror, e.filename)

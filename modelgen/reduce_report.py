@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
             'd mmm yyyy hh:mm:ss.000',
             r'^\d\d\s[A-S][a-z]+\s\d\d\d\d\s\d\d:\d\d:\d\d.\d\d\d',
-            r'%d %b %Y %H:%M:%S.%f']}
+            r'%d %b %Y %H:%M:%S']}
 """ Dictionary containing specific GMAT date time formats.
     Used for converting datetime strings written to Excel to UT1 dates and then displaying the numerical date in GMAT format using Excel.
     Element is List of date string, Excel cell number format, regular expression syntax, and datetime library format string parameter.
@@ -44,7 +44,7 @@ dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
 
 """ Regular expressions that are used in common. """
 regedot = re.compile(r'\.')
-regecr = re.compile(r'\s')
+regecr = re.compile(r'^\s')
 regesp = re.compile(' ')
 regecom = re.compile(r'[,]+')
 regecamel = re.compile(r'(?<=[a-z])[A-Z]')
@@ -113,6 +113,7 @@ def heading_row(data):
         logging.error('Exception %s in heading_row():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
         print('Exception', e.__doc__, ' heading_row():\n', lines[0], '\n', lines[1], '\n', lines[-1])
 
+
 def decimate_spaces(filename):
     """ Read a text file with multiple space delimiters, decimate the spaces and substitute commas.
         Do not replace single spaces, as these are in the time format.
@@ -159,6 +160,7 @@ def decimate_spaces(filename):
         logging.error('Exception %s in decimate_commas():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
         print('Exception', e.__doc__, ' decimate_spaces():\n', lines[0], '\n', lines[1], '\n', lines[-1])
 
+
 def decimate_commas(filename):
     """ Read a malformed csv file, which contains empty fields. Decimate commas. Write a clean file.
         Return the clean filename so that this function can be used as a parameter in 
@@ -204,7 +206,8 @@ def decimate_commas(filename):
     except Exception as e:
         lines = traceback.format_exc().splitlines()
         logging.error('Exception %s in decimate_commas():\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
-        print('Exception', e.__doc__, ' in decimate_commas():\n', lines[0], '\n', lines[1], '\n', lines[-1])       
+        print('Exception', e.__doc__, ' in decimate_commas():\n', lines[0], '\n', lines[1], '\n', lines[-1])
+
 
 def lines_from_csv(csvfile):
     """ Read a well-formed .csv file, or one which contains intentional empty fields. 
@@ -218,7 +221,7 @@ def lines_from_csv(csvfile):
             lines = list(f)
 
             for row, line in enumerate(lines):
-                line = regesp.sub('', line)
+                #line = regesp.sub('', line)
                 line = regecr.sub('', line)
                 rlist = line.split(',')
                 
@@ -271,7 +274,9 @@ def csv_to_xlsx(csvfile):
     cell_datetime = wb.add_format({'num_format': dtdict['GMAT1'][1]})
     cell_datetime.set_align('vcenter')
     sheet = wb.add_worksheet('Report')
-
+    """ The presence of the GMAT output report in a tab named 'Report' is a
+        Mandatory Interface agreement. 
+    """
     try:
         with open(csvfile, 'rt', newline='', encoding='utf8') as f:
             reader = csv.reader(f, quoting=csv.QUOTE_NONE)
