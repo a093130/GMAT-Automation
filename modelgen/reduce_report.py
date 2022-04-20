@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
 dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
             'd mmm yyyy hh:mm:ss.000',
             r'^\d\d\s[A-S][a-z]+\s\d\d\d\d\s\d\d:\d\d:\d\d.\d\d\d',
-            r'%d %b %Y %H:%M:%S']}
+            r'%d %b %Y %H:%M:%S.%f']}
 """ Dictionary containing specific GMAT date time formats.
     Used for converting datetime strings written to Excel to UT1 dates and then displaying the numerical date in GMAT format using Excel.
     Element is List of date string, Excel cell number format, regular expression syntax, and datetime library format string parameter.
@@ -85,10 +85,10 @@ def heading_row(data):
     data = regedot.sub(' ', data)
     """ Eliminate dot notation. """
     try:
-
         miter = regecamel.finditer(data)
+        match = regecamel.search(data)
         """ Break on camel case. """
-        if miter:
+        if match:
             mlist = list()
             for m in miter:
                 """ Unfortunately miter is not reversible, so form a list. """
@@ -102,9 +102,9 @@ def heading_row(data):
                 capspos = m.span()[0]
                 data = data[0:capspos] + ' ' + data[capspos:len(data)]
             
-            counts = list()
-            for item in data.split(' '):
-                counts.append(len(item))
+        counts = list()
+        for item in data.split(' '):
+            counts.append(len(item)+1)
             
         return data, max(counts)
 

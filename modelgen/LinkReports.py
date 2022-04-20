@@ -17,6 +17,7 @@ import re
 import logging
 import traceback
 import csv
+import pywintypes as pwin
 import xlsxwriter as xwrt
 import reduce_report as rr
 from pathlib import Path
@@ -64,8 +65,38 @@ class CLinkReports(CCleanUpReports):
         xlfile = rr.newfilename(rpt.parents[0]/fname, '.xlsx')
         """Slice the .csv suffix, append .xlsx suffix, open a new workbook under this name."""
         
-        wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
+        try:
+            wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
+
+            sheet = wb.add_worksheet('Report')
+            """ The presence of the GMAT output report in a tab named 'Report' is a
+                Mandatory Interface agreement.
+            """
+        except OSError as e:
+            lines = traceback.format_exc().splitlines()
+            logging.error("OS error: %s in CLinkReports extend() for filename %s.\n%s\n%s\n%s", e.strerror, e.filename,\
+                lines[0], lines[1], lines[-1])
+            print('OS error: ', e.strerror,' in CLinkReports extend() for filename ', e.filename,\
+                '\n', lines[0], '\n', lines[1], '\n', lines[-1])
+
+            return # Let do_batch() try another file.      
+
+        except pwin.com_error as ouch:
+            lines = traceback.format_exc().splitlines()
+            logging.error('Excel Workbook raised Windows com error in CLinkReports. {0}, {1}\n{2}\n{3}\n{4}'\
+                .format(type(ouch), ouch.args[1], lines[0], lines[1], lines[-1]))
+            print('Excel Workbook raised Windows com error in CLinkReports. {0}, {1}\n{2}\n{3}\n{4}'\
+                .format(type(ouch), ouch.args[1], lines[0], lines[1], lines[-1]))
+            
+            return # Let do_batch() try another file.
+
+        except Exception as e:
+            lines = traceback.format_exc().splitlines()
+            logging.error("Exception in CLinkReports extend(): %s\n%s\n%s\n%s", e.__doc__, lines[0], lines[1], lines[-1])
+            print('Exception in CLinkReports extend(): ', e.__doc__, '\n', lines[0], '\n', lines[1],'\n', lines[-1])
         
+            return # Let do_batch() try another file.
+
         cell_heading = wb.add_format({'bold': True})
         cell_heading.set_align('center')
         cell_heading.set_align('vcenter')
@@ -82,11 +113,7 @@ class CLinkReports(CCleanUpReports):
 
         cell_datetime = wb.add_format({'num_format': rr.dtdict['GMAT1'][1]})
         cell_datetime.set_align('vcenter')
-        
-        sheet = wb.add_worksheet('Report')
-        """ The presence of the GMAT output report in a tab named 'Report' is a
-            Mandatory Interface agreement.
-        """
+    
         try:
             with open(reduced, 'rt', newline='', encoding='utf8') as f:
                 reader = csv.reader(f, quoting=csv.QUOTE_NONE)
@@ -124,6 +151,7 @@ class CLinkReports(CCleanUpReports):
                                 if ematch:
                                     key2 = data[(bmatch.span()[1] - 1):ematch.span()[0]]
                                     key2 = rr.regesp.sub('', key2)
+                                    
                                     self.links.update({str(key1 +'@'+ key2):xlfile})
                                     """ Keep track of files written, by compound key of satellite and AOI. """
                                     
@@ -175,17 +203,21 @@ class CLinkReports(CCleanUpReports):
             return
 
         except OSError as e:
-            logging.error('%s in LinkReports extend(): %s in filename %s', e.__doc__, e.strerror, e.filename)
-            print(e.__doc__,' in LinkReports extend(): ', e.strerror, ' in filename ', e.filename)
+            logging.error('%s in LinkReports extend(): %s in filename %s\n%s\n%s\n%s',\
+                e.__doc__, e.strerror, e.filename, lines[0], lines[1], lines[-1])
+            print(e.__doc__,' in LinkReports extend(): ', e.strerror,\
+                '\nin filename ',e.filename,'\n',lines[0],'\n', lines[1],'\n', lines[-1])
 
         except ValueError as e:
-            logging.error('%s A1Gregorian heading not found.', e.args[0])
-            print(e.args[0],' A1Gregorian heading not found.')
+            lines = traceback.format_exc().splitlines()
+            logging.error('Value Error. A1Gregorian heading not found. %s\n%s\n%s\n%s',\
+                e.args[0], lines[0], lines[1], lines[-1])
+            print('ValueError in Link Reports extend()', '\n',e.args[0],'\n', lines[0],'\n',lines[1],'\n',lines[1],'\n', lines[-1])
 
         except Exception as e:
             lines = traceback.format_exc().splitlines()
-            logging.error("Exception in LinkReports extend(): %s\n%s\n%s", e.__doc__, lines[0], lines[-1])
-            print('Exception in LinkReports extend(): ', e.__doc__, '\n', lines[0],'\n', lines[-1])
+            logging.error('Exception in LinkReports extend(): %s\n%s\n%s\n%s', e.__doc__, lines[0], lines[1], lines[-1])
+            print('Exception in LinkReports extend():' '\n', e.__doc__, '\n', lines[0],'\n', lines[1], '\n', lines[-1])
              
         finally:
             wb.close()

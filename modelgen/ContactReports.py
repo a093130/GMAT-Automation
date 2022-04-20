@@ -17,7 +17,8 @@ import re
 import logging
 from runpy import run_path
 import traceback
-import sys
+import bisect as bi
+import copy as cp
 import pywintypes as pwin
 import xlwings as xw
 import xlsxwriter as xwrt
@@ -87,51 +88,78 @@ class CContactReports(CCleanUpReports):
         regetarget = re.compile('Target:[ ]*')
         regeobsrvr = re.compile('Observer:[ ]*')
         regeutc = re.compile('UTC')
+        regenumevt = re.compile('Number of events')
         regedur = re.compile('Duration')
         regesat = re.compile('[sS]at')
         regekey2 = re.compile('[A-Z][A-Za-z]+_')
         regern = re.compile(r'[\r\n]')
 
-        try:
-            rpt = Path(sightfile)
-            xlfile = rpt.with_suffix('.xlsx')
+        rpt = Path(sightfile)
+        xlfile = rpt.with_suffix('.xlsx')
 
+        print('Creating Output workbook {0}'.format(xlfile.name))
+        try:
+            wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
+            
+        except OSError as e:
+            lines = traceback.format_exc().splitlines()
+            logging.error("OS error: %s in CContactReports extend() for filename %s.\n%s\n%s\n%s", e.strerror, e.filename,\
+                lines[0], lines[1], lines[-1])
+            print('OS error: ', e.strerror,' in CContactReports extend() for filename ', e.filename,\
+                '\n', lines[0], '\n', lines[1], '\n', lines[-1])
+            return # Let do_batch() try another file.  
+
+        except pwin.com_error as ouch:
+            lines = traceback.format_exc().splitlines()
+            logging.error('Excel Workbook raised Windows com error in CContactReports. {0}, {1}\n{2}\n{3}\n{4}'\
+                .format(type(ouch), ouch.args[1], lines[0], lines[1], lines[-1]))
+            print('Excel Workbook raised Windows com error in CContactReports. {0}, {1}\n{2}\n{3}\n{4}'\
+                .format(type(ouch), ouch.args[1], lines[0], lines[1], lines[-1]))
+            return # Let do_batch() try another file.
+
+        except Exception as e:
+            lines = traceback.format_exc().splitlines()
+            logging.error("Exception in CContactReports extend(): %s\n%s\n%s\n%s", e.__doc__, lines[0], lines[1], lines[-1])
+            print('Exception in CContactReports extend(): ', e.__doc__, '\n', lines[0], '\n', lines[1],'\n', lines[-1])
+            return # Let do_batch() try another file.
+    
+        cell_heading = wb.add_format({'bold': True})
+        cell_heading.set_align('center')
+        cell_heading.set_align('vcenter')
+        cell_heading.set_text_wrap()
+
+        cell_wrap = wb.add_format({'text_wrap': True})
+        cell_wrap.set_align('vcenter')
+
+        cell_4plnum = wb.add_format({'num_format': '0.0000'})
+        cell_4plnum.set_align('vcenter')
+
+        cell_2plnum = wb.add_format({'num_format': '0.00'})
+        cell_2plnum.set_align('vcenter')
+
+        cell_datetime = wb.add_format({'num_format': rr.dtdict['GMAT1'][1]})
+        cell_datetime.set_align('vcenter')
+            
+        try:
             nospc = rr.decimate_spaces(rpt)
             reduced = rr.decimate_commas(nospc)
-            lines = rr.lines_from_csv(reduced)
 
             nospc = Path(nospc)
             if nospc.exists():
                 nospc.unlink()
 
+            lines = rr.lines_from_csv(reduced)
+
             reduced = Path(reduced)
             if reduced.exists():
                 reduced.unlink()
-            
-            wb = xwrt.Workbook(xlfile, {'constant_memory':True, 'strings_to_numbers':True, 'nan_inf_to_errors': True})
-            print('Creating Output workbook {0}'.format(xlfile.name))
-
-            cell_heading = wb.add_format({'bold': True})
-            cell_heading.set_align('center')
-            cell_heading.set_align('vcenter')
-            cell_heading.set_text_wrap()
-
-            cell_wrap = wb.add_format({'text_wrap': True})
-            cell_wrap.set_align('vcenter')
-
-            cell_4plnum = wb.add_format({'num_format': '0.0000'})
-            cell_4plnum.set_align('vcenter')
-
-            cell_2plnum = wb.add_format({'num_format': '0.00'})
-            cell_2plnum.set_align('vcenter')
-
-            cell_datetime = wb.add_format({'num_format': rr.dtdict['GMAT1'][1]})
-            cell_datetime.set_align('vcenter')
 
             lengs = list()
             times = list()
             colutc = list()
             startstop = dict()
+            contact = False #Kludge to include duration into the startstop dictionary.
+
             for row, rlist in lines.items():
                 for col, data in enumerate(rlist):
                     """ Make a list of start and stop times from Contact Locator file. """
@@ -170,10 +198,12 @@ class CContactReports(CCleanUpReports):
                                 pass
                             else:
                                 raise ValueError('Satellite number in filename {0} does not match data from file.'.format(xlfile.name))
+                        # End If for Target match (satellite)
 
                         mobs = regeobsrvr.match(data)
                         if mobs:
-                            """ Observer row contains the AOI and recurs for each data set in the file. """
+                            """ Observer row contains the AOI and recurs for each set of contacts in the file. """
+
                             obs = (data[(mobs.span()[1]):len(data)])
 
                             match = regekey2.search(obs)
@@ -184,11 +214,11 @@ class CContactReports(CCleanUpReports):
                                 key = key1 +'@'+ key2
                                 self.aoi.update({key:xlfile})
                                 """ Keep track of files written, by compound key of satellite and AOI. """
-                                
                                 continue
                             else:
                                 raise ValueError('Observer string %s does not contain key2 as expected.', data)
-                        
+                        # End If for Observer Match (AOI or Ground Station)
+
                         match = regeutc.search(data)
                         """ The 'UTC' heading row identifies the start/stop columns and recurs for each data set in the file. """
                         if match:
@@ -198,154 +228,248 @@ class CContactReports(CCleanUpReports):
                             elif len(colutc) == 1:
                                 colutc.append(col)
                                 continue
-                            else:
-                                """ only do this one time for the current file. """
-                                pass
-                        
-                        match = regedur.search(data)
-                        if match:
-                            continue
+                        # End If for UTC Heading match
 
-                        match = rr.regetime.match(data)
-                        if match:
+                        mdura = regedur.search(data)
+                        if mdura:
+                            if len(colutc) == 2:
+                                colutc.append(col)
+                                continue
+                        # End If for Duration heading match
+
+                        mtime = rr.regetime.match(data)
+                        if mtime:
                             """ Time data occurs for each visibility between a Target and Observer."""
                             if col == colutc[0]:
-                                """ A  contact Start Time in Excel datetime form. """
                                 starttime = dt.datetime.strptime(data, rr.dtdict['GMAT1'][3])
+                                """ A  contact Start Time in Excel datetime form. """
                                 continue
                             elif col == colutc[1]:
-                                """ A contact Stop Time in Excel datetime form. """
                                 stoptime = dt.datetime.strptime(data, rr.dtdict['GMAT1'][3])
-                                startstop.update({str(key):[starttime, stoptime]})
-                                """ Multiple start/stop times for each key. """
+                                """ A contact Stop Time in Excel datetime form. """
+                                contact = True
+                                """ data = duration does not match the regetime pattern and match
+                                    objects are not valid for conditional And and Or operators. 
+                                    So we extent the contact time detection logic using this kludge. """
                                 continue
                             else:
                                 raise ValueError('Unexpected time field found in data column, %d.', col)
-                
-            print('Start/Stop times determined. Decimating Link Report.')
+                        # End If for datetime pattern match
 
-            for key, times in startstop.items():
-                """ Use the ContactLocator start/stop times to select data from the Link Report"""
-                try:
-                    linkfile = self.links[key]
+                        if contact:
+                            if col == colutc[2]:
+                                contact = False
+                                duration = data
+                                times.append([starttime, stoptime, duration])
+                                continue
+                        # End If for Kludge
 
-                except KeyError as e:
-                    KeyError('Warning: Key %s Not found in self.links.  Continuing with next key.', key)
-                    print('Key {0} not associated with Link Report file in links dictionary. Continuing.'.format(key))
-                    continue
-                
-                if Path(linkfile).exists:
-                    """ Get and open the Link ReportFile using xlwings. """
-                    print('Opening input Link File {0} in XLWings.'.format(linkfile.name))
+                        mevts = regenumevt.match(data)
+                        if mevts:
+                            if len(times) > 0:
+                                startstop.update(cp.deepcopy({key:times}))
+                                """ Update start/stop times for the previous key each time 'Number of events' is found. """
+                                times.clear()
+                            continue
 
-                    with xw.App() as excel:
-                        excel.visible=False
+                        # End If for text occurring at end of contact
+                    # End If data length > 0
+                # End iteration over Contact Report row data
+            # End iteration over lines from Contact Report
+
+            print('Contact Start/Stop times determined for Report {0}.\n'.format(rpt.name))
+
+            with xw.App() as excel: # This line takes significant I/O time.
+                excel.visible=False  
+                for key, contacts in startstop.items():
+                    """ contacts is a 2 x 3 list of all startstop times associated with the given key.
+                        Use the Contact Locator start/stop times to select data from the Link Report 
+                        also associated with the key.
+                    """
+                    try:
+                        linkfile = self.links[key]
+
+                    except KeyError as e:
+                        KeyError('Warning: Key %s Not found in self.links.  Continuing with next key.', key)
+                        print('Key {0} not associated with Link Report file in links dictionary. Continuing.'.format(key))
+                        continue
+                    
+                    if Path(linkfile).exists:
+                        """ Get and open the Link ReportFile using xlwings. """
+                        print('Opening input Link File {0} in XLWings for {1}.'.format(linkfile.name, key))
 
                         aoi = key.split('@')[1]
                         """ Worksheet keys are shortened to just the AOI. """
-                        
                         sheet = wb.get_worksheet_by_name(aoi)
-                        """ The sheets to be written are created and named after the keys. """
+                        """ The sheet to be written is named the same as the keys. """
+
                         print('Accessing {0} worksheet {1} for writing.'.format(xlfile.name, aoi))
-                        
-                        bk = excel.books.open(str(linkfile))
+
                         try:
+                            bk = excel.books.open(str(linkfile)) # This step requires a lot of time.
+
                             lrsheet = bk.sheets['Report']
                             """ The presence of the GMAT output report in a tab named 'Report'
                                 is a mandatory condition. 
                             """
                         except pwin.com_error as ouch:
-                            logging.warning('Access to Link Report sheet raised Windows com error. {0}, {1}'\
+                            logging.warning('Attempted access to worksheet \'Report\' raised Windows com error. {0}, {1}'\
                                 .format(type(ouch), ouch.args[1]))
-                            print('Warning: Access to Link Report sheet raised Windows com error. {0}, {1}'\
+                            print('Warning: attempted access to worksheet \'Report\' raised Windows com error. {0}, {1}'\
                                 .format(type(ouch), ouch.args[1])) 
                             continue
-
-                        writerow = 0
+                        
                         lreprng = lrsheet.range('A1').expand()
-                        for row, des in enumerate(lreprng.rows):
-                            """ Link Report data row 0 is text, subsequent rows are either datetime or numeric. """
-                            data = des.value
-                            """ data is a list of the cells in the row.
-                                cellval = data[0] is under A1Gregorian
-                                cellval = data[2] is under Earth Fixed Planetodetic LAT
-                                cellval = data[3] is under Earth Fixed Planetodetic LON
-                                cellval = data[4] is under Earth Altitude
-                                cellval = data[5] is under [AOI] X
-                                cellval = data[6] is under [AOI] Y
-                                cellval = data[7] is under [AOI] Z
-                            """
+                        a1gregs = lreprng.columns[0].value 
+                        """ By default aigregs is a List. It is ordered by datetime. """
+                        
+                        data = lreprng.rows[0].value
+                        """ Headings List:
+                            cellval = data[0] is A1Gregorian
+                            cellval = data[2] is Earth Fixed Planetodetic LAT
+                            cellval = data[3] is Earth Fixed Planetodetic LON
+                            cellval = data[4] is Earth Altitude
+                            cellval = data[5] is [AOI] X
+                            cellval = data[6] is [AOI] Y
+                            cellval = data[7] is [AOI] Z
+                        """
+                        
+                        data.append('Slant.Range.(km)')
+                        data.append('Azimuth.(deg)')
+                        data.append('Elevation.(deg)')
+                        """ Headings for custom formulas. """
+                        writerow = 0
+                        for col, cellval in enumerate(data):
+                            cellval, leng = rr.heading_row(cellval)
+                            lengs.append(leng)
+                            sheet.set_column(col, col, leng)
+                            sheet.write(writerow, col, cellval, cell_heading)
+                        # End iteration over row 0 for headings
 
-                            """ @TODO:Performance enhancement. iterate through data[0] 
-                            and identify the row for each start time.
-                            """
-                  
-                            if row == 0:
-                                for col, cellval in enumerate(data):
-                                    cellval, leng = rr.heading_row(cellval)
-                                    lengs.append(leng)
-                                    sheet.set_column(col, col, leng)
-                                    
-                                    sheet.write(row, col, cellval, cell_heading)
-                                continue
+                        for times in contacts:
+                            writerow += 1
+                            for col, cellval in enumerate(times):
+                                if col == 0:
+                                    starttime = cellval
+                                    rowstart = bi.bisect_left(a1gregs, starttime)
+                                    """ One row before the start point in the Link Report data range. """
 
-                            elif row > 0:                        
-                                timegtstart = data[0] >= times[0]
-                                timeltstop = data[0] <= times[1]
-                                if timegtstart & timeltstop:                                  
-                                    for col, cellval in enumerate(data):
-                                        if col == 0:
-                                            writerow += 1
-                                            """ Only for col == 0 """
+                                    sheet.write(writerow, col, starttime, cell_datetime)
+                                    sheet.write(writerow, col+1, 'Start', cell_wrap)
+                                if col == 1:
+                                    stoptime = cellval
+                                    rowstop = bi.bisect_right(a1gregs, stoptime)
+                                    """ One row after the stop time in the Link Report data range. """
+                                if col == 2:
+                                    duration = cellval
+                                    """ Preserve the SPICE computed duration of contact from the Event Locator. """
+                                # End column cases
+                            # End iteration over rows of Link Report A1 Gregorian
 
-                                            cellstr = cellval.strftime(rr.dtdict['GMAT1'][3])
-                                            print('Writing Link Report data for time {0}'.format(cellstr))
-                                            leng = len(cellstr)
-                                            if len(lengs) < col + 1:
-                                                """ There is no element of lengs corresponding to the (zero based) column. """
-                                                lengs.append(leng)
-                                            elif leng > lengs[col]:
-                                                """ Only update the column width if current data is longer than previous. """
-                                                lengs[col] = leng
+                            for row in range(rowstart, rowstop):
+                                """ Write out the Link Report attributes between the start/stop times."""
+                                
+                                data = lreprng.rows[row].value
+                                basedata = len(data)
 
-                                            sheet.set_column(col, col, leng)
-                                            sheet.write(writerow, col, cellval, cell_datetime)
-                                            continue
-                                    
-                                        elif col > 0:
-                                            cellstr = '{: 0.4f}'.format(cellval)
-                                            leng = len(cellstr) + 2
-                                            if len(lengs) < col + 1:
-                                                """ There is no element of lengs corresponding to the (zero based) column. """
-                                                lengs.append(leng)
-
-                                            elif leng > lengs[col]:
-                                                """ Only update the column width if current data is longer than previous. """
-                                                lengs[col] = leng
+                                writerow += 1
+                                formrow = writerow +1
+                                """ Excel Rows are 1-based. """
+                                data.append('=SQRT(E{0}^2+F{0}^2+G{0}^2)'.format(formrow))
+                                """Formula for Slant Range (km)"""
+                                data.append('=DEGREES(ATAN(F{0}/E{0}))'.format(formrow))
+                                """Formula for Azimuth (deg)"""
+                                data.append('=DEGREES(ATAN(G{0}/(SQRT(E{0}^2+F{0}^2))))'.format(formrow))
+                                """Formula for Elevation (deg)"""
+                                for col, cellval in enumerate(data):            
+                                    if col == 0:
+                                        """ Ephemeris """
+                                        cellstr = cellval.strftime(rr.dtdict['GMAT1'][3]) 
+                                        leng = len(cellstr) * 0.85
+                                        if len(lengs) < col + 1:
+                                            lengs.append(leng)
+                                        if leng > lengs[col]:
+                                            lengs[col] = leng
+                                            """ Only update the column width if current data is longer than previous. """
+                                        else:
+                                            leng = lengs[col]
                                             
-                                            sheet.set_column(col, col, leng)
-                                            sheet.write(writerow, col, cellval, cell_4plnum)
-                                            continue
-                                else:
-                                    """ Only write data that is between the ContactLocator start and stop times."""
-                                    continue
+                                        sheet.set_column(col, col, leng)
+                                        sheet.write(writerow, col, cellval, cell_datetime)
 
-                        sheet.freeze_panes('A2')
-                        """ Lock the first row, first column after formatting of all rows and columns is done. """                               
+                                        continue
 
-            logging.info('CContactReports extend() completed for filename: %s.', rpt.name)
-            print ('CContactReports extend() completed  for filename:', rpt.name)
+                                    elif col in range(1, basedata):
+                                        """ Attributes """
+                                        cellstr = '{: 0.4f}'.format(cellval)
+                                        leng = len(cellstr) + 1
+                                        if len(lengs) < col + 1:
+                                            lengs.append(leng)
+                                        if leng > lengs[col]:
+                                            lengs[col] = leng
+                                            """ Only update the column width if current data is longer than previous. """
+                                        else:
+                                            leng = lengs[col]
+                                            
+                                        sheet.set_column(col, col, leng)
+                                        sheet.write(writerow, col, cellval, cell_4plnum)
 
+                                        continue
+
+                                    elif col >= basedata:
+                                        """ Write the custom formulas on this row, starting with nextcolumn"""
+                                        leng = 10 # We do not want the column length = length of the formula string.
+                                        if len(lengs) < col + 1:
+                                            lengs.append(leng)
+                                        if leng > lengs[col]:
+                                            lengs[col] = leng
+
+                                        sheet.set_column(col, col, leng)
+                                        sheet.write_formula(writerow, col, cellval, cell_4plnum)
+
+                                        continue
+
+                                    else:
+                                        """ Should be impossible to reach, but if so, that's a bad thing. """
+                                        raise IndexError('Column {0} is out of range for {1}'.format(col, Path(linkfile).name))
+                                    # End column cases
+                                # End iteration over row columns
+                            # End iteration over start/stop range
+                                  
+                            writerow += 1
+                            sheet.write(writerow, 0, stoptime, cell_datetime)
+                            sheet.write(writerow, 1, 'Stop', cell_wrap)
+                            sheet.write(writerow, 2, 'Duration:', cell_wrap)
+                            sheet.write(writerow, 3, duration, cell_2plnum)
+                            sheet.write(writerow, 4, 'secs', cell_wrap)
+                    # End iteration over all Contact Locator Report rows
+
+                    sheet.freeze_panes('A2')
+                    """ Lock the first row, first column after formatting of all rows and columns is done. """                               
+                # End iteration over contact file
+
+                logging.info('CContactReports extend() completed for filename: %s.', rpt.name)
+                print ('CContactReports extend() completed  for filename:', rpt.name, '\n')
+                
+            # Close workbook
             return
 
         except OSError as e:
-            logging.error("OS error: %s in CContactReports extend() for filename %s", e.strerror, e.filename)
-            print('OS error: ', e.strerror,' in CContactReports extend() for filename ', e.filename)
+            lines = traceback.format_exc().splitlines()
+            logging.error("OS error: %s\n%s\n%s\n%s in CContactReports extend() for filename %s", e.strerror, e.filename,\
+                lines[0], lines[1], lines[-1])
+            print('OS error: ', e.strerror,' in CContactReports extend() for filename ', e.filename,\
+                '\n',lines[0], '\n',lines[1], '\n',lines[-1])
 
         except ValueError as e:
             lines = traceback.format_exc().splitlines()
             logging.error('%s, Incompatible input value, %s.\n%s\n%s\n%s', rpt.name, e.args[0],lines[0], lines[1], lines[-1])
             print(rpt.name, ', Incompatible input value, ',e.args[0], '\n', lines[0], '\n', lines[1],'\n', lines[-1])
+
+        except IndexError as e:
+            lines = traceback.format_exc().splitlines()
+            logging.error('%s, %s \n%s \n%s \n%s',e.__doc__, e.args[0], lines[0], lines[1], lines[-1])
+            print(e.__doc__, e.args[0], '\n', lines[0], '\n', lines[1],'\n', lines[-1])
 
         except pwin.com_error as ouch:
             lines = traceback.format_exc().splitlines()
@@ -361,6 +485,8 @@ class CContactReports(CCleanUpReports):
         
         finally:
             wb.close()
+
+
 
 if __name__ == "__main__":
     """ Retrieve the formatting batch file, open and format each .csv file listed """
@@ -409,7 +535,8 @@ if __name__ == "__main__":
         lr_inst.do_batch(batchfile)
 
         logging.info ('Link Reports completed.')
-        print('Link Reports completed.')
+        print('Link Reports completed.\n')
+
         fname = QFileDialog().getOpenFileName(None, 'Open (SIGHT) Contact Locater Reports batch file.', 
                         o_path,
                         filter='Batch files(*.batch)')
@@ -419,12 +546,11 @@ if __name__ == "__main__":
         sightfile = Path(fname[0])
 
         cr_inst = CContactReports()
-        cr_inst.setlinks(lr_inst.links)        
+        cr_inst.setlinks(lr_inst.links)     
         cr_inst.do_batch(sightfile)
 
-        logging.info ('Contact Locater Reports completed.')
-        print('Contact Locater Reports completed.')
-        print('Contact Reports Test Case Completed.')
+        logging.info ('Contact Reports Completed.')
+        print('Contact Reports Completed.')
 
     except Exception as e:
         lines = traceback.format_exc().splitlines()
