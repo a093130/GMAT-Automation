@@ -1,0 +1,21 @@
+""" In setting up the Python/Lib/site-packages, the following libraries must be installed. """
+__future__
+datetime
+re
+platform
+logging
+traceback
+getpass
+random
+subprocess
+multiprocessing
+multiprocessing
+multiprocessing
+PyQt5
+copy
+csv
+numpy
+scipy
+pywintypes
+xlwings
+xlsxwriter

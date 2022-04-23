@@ -30,8 +30,8 @@ from pathlib import PurePath
 import datetime as dt
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
-from gmatlocator import CGMATParticulars
-from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
+from ..modelgen.gmatlocator import CGMATParticulars
+from PyQt5.QtWidgets import(QApplication, QFileDialog)
 
 dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
             'd mmm yyyy hh:mm:ss.000',

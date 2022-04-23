@@ -18,9 +18,11 @@ from __future__ import absolute_import
 
 import sys
 
-__all__ = ["reduce_report", "CleanUpData", "CleanUpReports", "ContactReports", "LinkReports", "batch_alfano_rep"]
+__all__ = ["batch_alfano_rep", "reduce_report", "CleanUpData", "CleanUpReports", "ContactReports", "LinkReports", "LinkBudgets"]
 
 if sys.version_info[:2] < (3, 4):
     m = "Python 3.4 or later is required for Alfano (%d.%d detected)."
     raise ImportError(m % sys.version_info[:2])
 del sys
+
+from .modelgen import gmatlocator

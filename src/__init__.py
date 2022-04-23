@@ -31,4 +31,5 @@ from .reportgen import CleanUpData
 from .reportgen import CleanUpReports
 from .reportgen import ContactReports
 from .reportgen import LinkReports
+from .reportgen import LinkBudgets
 

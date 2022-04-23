@@ -17,8 +17,8 @@ import logging
 import traceback
 import reduce_report as rr
 from pathlib import Path
-from gmatlocator import CGMATParticulars
 from CleanUpReports import CCleanUpReports
+from ..modelgen.gmatlocator import CGMATParticulars
 
 class CCleanUpData(CCleanUpReports): # syntax is module.class.
     """ Intended as a CleanUp operation that yields a memory resident dictionary rather than a file. 
