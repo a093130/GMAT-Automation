@@ -38,7 +38,7 @@ from pathlib import Path
 from LinkReports import CLinkReports
 from CleanUpReports import CCleanUpReports
 from LinkReports import CLinkReports
-from ..modelgen.gmatlocator import CGMATParticulars
+from gmatlocator import CGMATParticulars
 
 class CContactReports(CCleanUpReports):
     """ Specialization class to generate SightLocator Reports.

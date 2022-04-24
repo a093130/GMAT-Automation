@@ -4,3 +4,7 @@
 *.xlsx
 *-workspace
 *~*
+*egg*
+build/*.*
+dist/*.*
+MANIFEST*
