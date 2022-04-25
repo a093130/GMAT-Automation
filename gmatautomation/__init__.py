@@ -20,16 +20,22 @@ if sys.version_info[:2] < (3, 4):
     raise ImportError(m % sys.version_info[:2])
 del sys
 
-from .modelgen import fromconfigsheet
+""" The following must be imported in order of dependency. """
 from .modelgen import gmatlocator
-from .modelgen import modelgen
+from .modelgen.gmatlocator import CGmatParticulars
 from .modelgen import modelpov
+from .modelgen import fromconfigsheet
+from .modelgen import modelgen
 from .modelcontrol import gmat_batcher
 from .reportgen import reduce_report
 from .reportgen import batch_alfano_rep
-from .reportgen import CleanUpData
 from .reportgen import CleanUpReports
-from .reportgen import ContactReports
+from .reportgen.CleanUpReports import CCleanUpReports
+from .reportgen import CleanUpData
+from .reportgen.CleanUpData import CCleanUpData
 from .reportgen import LinkReports
+from .reportgen.LinkReports import CLinkReports
+from .reportgen import ContactReports
+from .reportgen.ContactReports import CContactReports
 from .reportgen import LinkBudgets
-
+from .reportgen.LinkBudgets import CLinkBudgets
