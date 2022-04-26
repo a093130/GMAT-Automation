@@ -1,17 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Apr 30 16:20:54 2019
+    @file: gmatlocator.py
 
-@author: Colin Helms
+    @brief: This module provides a base class that is useful for locating
+     the GMAT executable directory.  The current version is Windows specific.
 
-@Description:
-    This module provides a base class that is useful for locating the GMAT executable
-    directory.  
-    Current version is Windows specific, since it uses environment variable %LOCALAPPDATA%.
+    @copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
+
+    @author  Colin Helms, colinhelms@outlook.com, [CCH]
+
+    @details The key to this utility class is the find_gmat() function, which starting with the
+    %LOCALAPPDATA% directory, searches for gmat.exe and captures its parent file path. 
     
-@Change Log:
-    30 Apr 2019, refactored from gmat_batcher.py.
-    26 May 2019, Include CGMATParticulars from modelgen.py. Used by reducereport, modelgen.
+    @remark Change History
+        Tue Apr 30 16:20:54 2019, File Created
+        30 Apr 2019, refactored from gmat_batcher.py.
+        26 May 2019, Include CGMATParticulars from modelgen.py. Used by reducereport, modelgen.
+        Mar 08 2022, committed to GitHub repository GMAT-Automation.
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+
+    @bug https://github.com/a093130/GMAT-Automation/issues   
 """
 import os
 import sys
@@ -90,8 +98,6 @@ class CGmatParticulars():
         
         if self.startup_file_path == None:
             ex_file_path = self.get_executable_path()
-            #rege = re.compile('gmat.exe', re.IGNORECASE)
-            #self.startup_file_path = rege.sub('gmat_startup_file.txt', ex_file_path)
             self.startup_file_path = ex_file_path.parents[0]/'gmat_startup_file.txt'
         else:
             pass

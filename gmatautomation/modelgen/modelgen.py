@@ -1,15 +1,19 @@
 #! python
 # -*- coding: utf-8 -*-
 """
-Created on Fri Oct 19 14:35:48 2018
+    @file modelgen.py
 
-@author: colin helms
+    @brief: This script produces GMAT model Include files containing 
+    variants of model resource values and parameters.  
 
-@description:
-    This script produces GMAT model Include files containing 
-    variants of model resource values and parameters.  The module supports 
-    batch processing of different mission scenarios in which the spacecraft
-    configuration and/or initial orbital elements vary.
+    @copyright: Copyright (C) 2019 - 2022 Freelance Rocket Science, All rights reserved.
+
+    @author  Colin Helms, colinhelms@outlook.com, [CCH]
+
+    @details:
+    The module provides function to implement batch processing of different 
+    mission scenarios in which the spacecraft configuration and/or 
+    initial orbital elements vary.
     
     The approach utilizes the GMAT 2018a #Include macro, which loads resources and 
     script snippets from external files.  The script creates Include files whose
@@ -121,17 +125,19 @@ Created on Fri Oct 19 14:35:48 2018
     Furthermore, there may be multiple ReportFile creates under various names.
     These instance dependencies can be avoided by reading and interpreting ModelMissionTemplate.script.
         
-@Change Log:
-    08 Jan 2019, initial baseline
-    09 Jan 2019, Integration branch, ReportFiles are written to 'Report/' directory.
-    10 Jan 2019, NASA did not implement the GMAT batch command.
-    08 Feb 2019, Fix near line 443, include model filename fixed.
-    09 Feb 2019, Fix near lines 249, 288, 300, 307 357: is "ReportFile" 
-        should be "ReportFile1".
-    10 Apr 2019, Flow Costates through to model from worksheet.
-    16 Apr 2019, configspec value formatting moved to fromconfigsheet.py
-    26 May 2019, Factor out class CGMATParticulars to the gmatlocator module.
-       
+    @remark Change History
+        Fri Oct 19 14:35:48 2018, Created
+        09 Jan 2019, [CCH] commit to GitHub repository GMAT-Automation, Integration Branch.
+        10 Jan 2019, [CCH] Implement the GMAT batch command.
+        08 Feb 2019, [CCH] Fix near line 443, include model filename fixed.
+        09 Feb 2019, [CCH] Fix is "ReportFile" should be "ReportFile1".
+        10 Apr 2019, [CCH] Flow Costates through to model from worksheet.
+        16 Apr 2019, c[CCH] onfigspec value formatting moved to fromconfigsheet.py
+        26 May 2019, [CCH] Factor out class CGMATParticulars to the gmatlocator module.
+        Wed Apr 20 14:54:49 2022, [CCH] reorganized and included in sdist
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+    
+    @bug https://github.com/a093130/GMAT-Automation/issues
 """
 #from modelgen import find_gmat
 
@@ -140,10 +146,10 @@ import os
 import re
 import time
 import logging
-import fromconfigsheet as cfg
 from shutil import copy as cp
-from gmatlocator import CGMATParticulars
 from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
+from gmatautomation import fromconfigsheet as cfg
+from gmatautomation import CGmatParticulars
 
 model_template = 'ModelMissionTemplate.script'
 model_static_res = 'Include_StaticDefinitions.script'
@@ -384,7 +390,7 @@ if __name__ == "__main__":
 
     qApp.processEvents()
     
-    gmat_paths = CGMATParticulars()
+    gmat_paths = CGmatParticulars()
     o_path = gmat_paths.get_output_path()
     
     src = o_path + model_template

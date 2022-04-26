@@ -1,17 +1,25 @@
 #! Python
 # -*- coding: utf-8 -*-
 """
-@description:  module container for ContactReports class definition.
+@file: LinkReports.py
 
-@author: colinhelms@outlook.com
+@brief: This module provides a container for class definition CLinkReports.
 
 @copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 
-XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
-https://docs.xlwings.org/en/stable/license.html
+@author  Colin Helms, colinhelms@outlook.com, [CCH]
+
+@details ContactReports provides Excel workbook formatting of Link Reports.
+These files are GMAT ReportFiles that provide satellite geodetic Latitude,
+Longitude, Altitude and topographic X/Y/Z coordinates relative to
+a fixed ground station.  They fundamental to Link Budget and Earth Observation
+Collection Planning calculations.
    
-@changes:
-    Created on Fri Mar 8 2019
+@remark Change History
+    Created on Fri Mar 8 2019, GitHub repository GMAT-Automation.
+    Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+
+@bug https://github.com/a093130/GMAT-Automation/issues
 """
 import re
 import logging
@@ -19,19 +27,14 @@ import traceback
 import csv
 import pywintypes as pwin
 import xlsxwriter as xwrt
-import reduce_report as rr
 from pathlib import Path
 import datetime as dt
-from CleanUpReports import CCleanUpReports
+from gmatautomation import reduce_report as rr
+from gmatautomation import CCleanUpReports
+from gmatautomation import CGmatParticulars
 
 class CLinkReports(CCleanUpReports):
-    """ Specialization class to format a Link Report file.
-
-        Link Reports are GMAT ReportFiles that provide satellite geodetic Latitude,
-        Longitude, Altitude and topographic X/Y/Z coordinates relative to
-        a fixed ground station.  They used for Link Budget and EOS
-        Collection Planning FOV calculations.
-    """
+    """ Specialization class to format a Link Report file. """
     def __init__(self, **args):
         super().__init__(**args)
 
@@ -232,7 +235,6 @@ if __name__ == "__main__":
     """
     import platform
     import getpass
-    from gmatautomation import CGMATParticulars
     from PyQt5.QtWidgets import(QApplication, QFileDialog)
 
     logging.basicConfig(
@@ -251,7 +253,7 @@ if __name__ == "__main__":
                  host_attr.version, \
                  host_attr.processor)
 
-    gmat_paths = CGMATParticulars()
+    gmat_paths = CGmatParticulars()
     o_path = gmat_paths.get_output_path()
     """ o_path is an instance of Path that locates the GMAT output directory. """
 

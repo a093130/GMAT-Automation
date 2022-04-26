@@ -2,7 +2,7 @@
 # # -*- coding: utf-8 -*-
 """
 @Name: GmatAutomation 
-@Version: v0.2a
+@Version: v0.2a1
 
 Created on Sun Apr 28 15:28:56 2019
 Deployed to <PYTHONPATH>/GmatAutomation

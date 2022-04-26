@@ -1,27 +1,30 @@
 #! Python
 # -*- coding: utf-8 -*-
 """
-@description:  module container for class definition CleanUpReports.
+	@file CleanUpReports.py
+	@brief File is module container for class definition CCleanUpReports.
+	
+	@copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 
-@author: colinhelms@outlook.com
+	@author  Colin Helms, colinhelms@outlook.com, [CCH]
 
-@copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
-
-XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
-https://docs.xlwings.org/en/stable/license.html
-   
-@change:
-    Created on Fri Mar 29 2022
+    @details Provides minimal methods to decimate spaces and commas in text files, 
+        writes a clean Excel file.
+    
+    @remark Change History
+        Fri Mar 28 2022 [CCH] File created, GitHub repository GMAT-Automation.
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+    
+    @bug https://github.com/a093130/GMAT-Automation/issues
 """
 import re
 import logging
 import traceback
 from pathlib import Path
-import reduce_report as rr
+from gmatautomation import reduce_report as rr
 
 class CCleanUpReports:
-    """ Base Class.  Provides minimal methods to decimate spaces and commas in text files, 
-        writes a clean Excel file.  Designed for specialization through overload of the extend function.
+    """ Base Class.  Designed for specialization through overload of the extend function.
     """
     def __init__(self, **args):
         super().__init__(**args)
@@ -117,8 +120,8 @@ if __name__ == "__main__":
     import getpass
     import logging
     import traceback
-    from gmatautomation import CGMATParticulars
     from PyQt5.QtWidgets import(QApplication, QFileDialog)
+    from gmatautomation import CGmatParticulars
 
     logging.basicConfig(
             filename='./CleanUpReports.log',
@@ -136,7 +139,7 @@ if __name__ == "__main__":
                  host_attr.version, \
                  host_attr.processor)
     
-    gmat_paths = CGMATParticulars()
+    gmat_paths = CGmatParticulars()
     o_path = gmat_paths.get_output_path()
     """ o_path is an instance of Path that locates the GMAT output directory. """
 

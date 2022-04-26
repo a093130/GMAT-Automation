@@ -1,27 +1,32 @@
 #! python
 # -*- coding: utf-8 -*-
 """
-Created on Wed Feb  6 19:17:02 2019
+    @file gmat_batcher.py
 
-@author: colinhelms@outlook.com
+    @brief: This routine reads the batchfile created by modelgen.py, 
+    and executes GMAT in command line mode for each filename found in the batchfile.  
 
-@Description:
-    This routine reads the batchfile created by modelgen.py, and executes GMAT in
-    command line mode for each filename found in the batchfile.
-    
+    @copyright: Copyright (C) 2019 - 2022 Freelance Rocket Science, All rights reserved.
+
+    @author  Colin Helms, colinhelms@outlook.com, [CCH]
+
+    @details:
     Assumption 1: GMAT.exe is in the executable path.
     Assumption 2: A batchfile exists in the user's directory 
         consisting of a line-by-line list of model filenames to be executed.
     Assumption 3: The user's platform is capable of executing each model file
         with 5 minutes.  If not, change the cpto global variable below.
     
-@Change Log:
-    10 Jan 2019, Initial baseline, Integration branch.
-    28 Feb 2019, Working Copy committed to Integration.
-    01 Mar 2019, Multiprocessing Enhancement.
-    03 Jun 2019, cleanup by quitting the Qt app.
-    31 July 2019, Added progress indicator using Manager.Queue. Updated cpto to 315.
-                 
+    @remark Change History
+        Wed Feb  6 2019, Created.
+        10 Jan 2019, [CCH] commit to GitHub repository GMAT-Automation, Integration Branch.
+        01 Mar 2019, [CCH] Multiprocessing Enhancement.
+        03 Jun 2019, [CCH] cleanup by quitting the QtApp.
+        31 July 2019, [CCH] Added progress indicator using Manager.Queue. Updated cpto to 315.
+        Wed Apr 20 14:54:49 2022, [CCH] reorganized and included in sdist
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+
+    @bug https://github.com/a093130/GMAT-Automation/issues                
 """
 from __future__ import division
 """ Must be at the top of the file - maps features supported in future python versions """

@@ -1,31 +1,31 @@
 #! Python
 # -*- coding: utf-8 -*-
 """ 
-	@file LinkBudgets.py
-	@brief module container for class definition ContactReports.
+	@file ContactReports.py
+	@brief module container for class definition CContactReports.
 	
-	@copyright 2022 Freelance Rocket Science
+	@copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
     XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
     https://docs.xlwings.org/en/stable/license.html
 
 	@author  Colin Helms, colinhelms@outlook.com, [CCH]
-	@version v0.2a
 
 	@details Class def CContactReports extends the class CCleanUpReports to combine
-    GMAT Contact Locator Report files with GMAT Report files tailored to describe
-    Earth ground locations in terms of geodetic Latitude/Longitude and spacecraft
-    location in topographic cartesian coordinates relative to the ground origin.
+    GMAT Contact Locator Report files with GMAT Link Reports Link Reports are ReportFiles
+    tailored to describe Earth ground locations in terms of geodetic Latitude/Longitude
+    and spacecraft location in topographic cartesian coordinates relative to a 
+    Area of Interest (or Ground Station) Earth Centered origin.
     The reader should note that the topographic coordinate system is defined with
     Y in the eastward direction, and Z normal to the ellipsoid at the ground origin.
 	
 	@remark Change History
-		8 Mar 2022: [CCH] File created, committed to GIT repository GMAT-Automation.
+		8 Mar 2022: [CCH] File created, GitHub repository GMAT-Automation.
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
 		
-	@bug [<initials>] <backlog item>
+	@bug https://github.com/a093130/GMAT-Automation/issues
 """
 import re
 import logging
-from runpy import run_path
 import traceback
 import bisect as bi
 import copy as cp
@@ -34,11 +34,10 @@ import xlwings as xw
 import xlsxwriter as xwrt
 import datetime as dt
 from pathlib import Path
-import reduce_report as rr
-from LinkReports import CLinkReports
-from CleanUpReports import CCleanUpReports
-from LinkReports import CLinkReports
-from gmatautomation import CGMATParticulars
+from gmatautomation import reduce_report as rr
+from gmatautomation import CCleanUpReports
+from gmatautomation import CLinkReports
+from gmatautomation import CGmatParticulars
 
 class CContactReports(CCleanUpReports):
     """ Specialization class to generate SightLocator Reports.
@@ -113,7 +112,31 @@ class CContactReports(CCleanUpReports):
             logging.error("Exception in CContactReports extend(): %s\n%s\n%s\n%s", e.__doc__, lines[0], lines[1], lines[-1])
             print('Exception in CContactReports extend(): ', e.__doc__, '\n', lines[0], '\n', lines[1],'\n', lines[-1])
 
- 
+    def formulaheadings(self):
+        """ Trivial method to permit specialization of formulas in derived classes. """
+        data = list()
+
+        data.append('Slant.Range.(km)')
+        data.append('Azimuth.(deg)')
+        data.append('Elevation.(deg)')
+
+        return data
+
+    def formulas(self, writerow):
+        """ Trivial method to permit specialization of formulas in derived classes. """
+        formrow = writerow +1
+        """ Excel Rows are 1-based. """
+        data = list()     
+
+        data.append('=SQRT(E{0}^2+F{0}^2+G{0}^2)'.format(formrow))
+        """Formula for Slant Range (km)"""
+        data.append('=DEGREES(ATAN(F{0}/E{0}))'.format(formrow))
+        """Formula for Azimuth (deg)"""
+        data.append('=DEGREES(ATAN(G{0}/(SQRT(E{0}^2+F{0}^2))))'.format(formrow))
+        """Formula for Elevation (deg)"""
+
+        return data
+
     def extend(self, sightfile):
         """ This specialization of extend() provides specialized methods to format 
             a Contact Locator Report (SIGHTLocator Report).
@@ -369,7 +392,7 @@ class CContactReports(CCleanUpReports):
                         """
                         
                         writerow = 0
-                        hformulas = self.formulaheadings(writerow)
+                        hformulas = self.formulaheadings()
                         """ Headings for custom formulas. """
                         for h in hformulas:
                             data.append(h)
@@ -409,7 +432,7 @@ class CContactReports(CCleanUpReports):
 
                                 writerow += 1
                                 formulatxt = self.formulas(writerow)
-                                """ Additional columns of Excel formulas. """
+                                """ Additional columns of custom Excel formulas. """
                                 for f in formulatxt:
                                     data.append(f)
 
@@ -535,7 +558,7 @@ if __name__ == "__main__":
         """
     import getpass
     import platform
-    from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
+    from PyQt5.QtWidgets import(QApplication, QFileDialog)
 
     logging.basicConfig(
             filename='./ContactReports.log',
@@ -554,7 +577,7 @@ if __name__ == "__main__":
                  host_attr.processor)
 
     try:
-        gmat_paths = CGMATParticulars()
+        gmat_paths = CGmatParticulars()
         o_path = gmat_paths.get_output_path()
         """ o_path is an instance of Path that locates the GMAT output directory. """
 

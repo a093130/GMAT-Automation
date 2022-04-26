@@ -1,23 +1,25 @@
 #! Python
 # -*- coding: utf-8 -*-
 """
-@Description:  Sequentially opens .csv formatted GMAT ReportFiles, removes whitespace 
-copies pertinent rows and comma delimited fields into an .xlsx file.
+	@file Creduce_report.py
+	@brief File is module container for common report formatting utility.
+	
+	@copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 
-@author: colinhelms@outlook.com
+	@author  Colin Helms, colinhelms@outlook.com, [CCH]
+	@version v0.2a1
 
-@Copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
+    @details:  Provides functions and data types used in common by data reduction 
+    scripts that reduce and format GMAT output reports.
 
-XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
-https://docs.xlwings.org/en/stable/license.html
-   
-@Change Log:
-    Created on Fri Mar 8 2019
-    17 Mar 2022, Re-factor to support different report formats.
-    29 Mar 2022, Modify Unit Tests to execute derived classes.
+    @remark Change History
+        Fri Mar 8 2019,  [CCH] File created, GitHub repository GMAT-Automation.
+        17 Mar 2022, [CCH] Re-factor to support different report formats.
+        29 Mar 2022, [CCH] Modify Unit Tests to execute derived classes.
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+
+    @bug https://github.com/a093130/GMAT-Automation/issues
 """
-from genericpath import isfile
-import os
 import time
 import re
 import platform
@@ -30,8 +32,8 @@ from pathlib import PurePath
 import datetime as dt
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
-from gmatautomation import CGMATParticulars
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
+from gmatautomation import CGmatParticulars
 
 dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
             'd mmm yyyy hh:mm:ss.000',
@@ -365,7 +367,7 @@ if __name__ == "__main__":
                  host_attr.processor)
     
 
-    gmat_paths = CGMATParticulars()
+    gmat_paths = CGmatParticulars()
     o_path = gmat_paths.get_output_path()
     """ o_path is an instance of Path that locates the GMAT output directory. """
 

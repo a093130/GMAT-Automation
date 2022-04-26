@@ -2,7 +2,7 @@
 # # -*- coding: utf-8 -*-
 """
 @Name: GmatAutomation
-@Version: 0.2a
+@Version: 0.2a1
 
 Created on Sun Apr 28 15:28:56 2019
 Deployed to <PYTHONPATH>/GmatAutomation
@@ -16,7 +16,7 @@ from __future__ import absolute_import
 import sys
 
 if sys.version_info[:2] < (3, 4):
-    m = "Python 3.4 or later is required for Alfano (%d.%d detected)."
+    m = "Python 3.4 or later is required. (%d.%d detected)."
     raise ImportError(m % sys.version_info[:2])
 del sys
 

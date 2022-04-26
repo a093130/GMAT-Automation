@@ -1,26 +1,30 @@
+#! Python
+# -*- coding: utf-8 -*-
 """ 
 	@file LinkBudgets.py
-	@brief Module containing extension class containing specialized functions.
+	@brief module container for class definition CLinkBudgets.
 	
-	@copyright 2022 Freelance Rocket Science
+	@copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 	@author  Colin Helms, colinhelms@outlook.com, [CCH]
-	@version <version>
 
 	@details Class def CLinkBudgets extends the class CContactReports to insert useful Exel
     formulas for calculating Link Budgets.  The parent class provide virtual methods
     formulaheadings(self, row) and formulas(self, row) to be extended herein.
 	
 	@remark Change History
-		22 April 2022: [CCH] File created, committed to GIT repository GMAT-Automation.
+		22 April 2022: [CCH] File created, GitHub repository GMAT-Automation.
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
 
 		
-	@bug [<initials>] <backlog item>
+	@bug https://github.com/a093130/GMAT-Automation/issues
 
 """
-from dataclasses import dataclass
-from CleanUpReports import CCleanUpReports
+from gmatautomation import CContactReports
 
-class CLinkBudgets(CCleanUpReports):
+class CLinkBudgets(CContactReports):
+    def __init__(self,**args):
+        super().__init__(**args)
+
     def formulaheadings(self):
         """ Trivial method to permit specialization of formulas used in Contact Report. """
         data = list()

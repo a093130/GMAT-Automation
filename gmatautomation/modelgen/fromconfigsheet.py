@@ -1,26 +1,22 @@
 #! python
 # -*- coding: utf-8 -*-
 """
-@file fromconfigsheet.py
+    @file fromconfigsheet.py
 
+    @brief: This module reads configurations from the "Vehicle Optimization Tables" workbook 
+    and returns a corresponding specification of various cases of GMAT model resources. It
+    is currently a point design in support of variations in the AlfanoXfer.script GMAT models.
 
-@remarks:
-    Created on Sat Oct 20 09:53:28 2018
-    08 Jan 2019, [CCH] initial baseline
-    30 Apr 2019, [CCH] Flow Costates and payload mass through to model from worksheet.
-
-@author: Colin Helms
-
-@brief:
-    This module reads configurations from the "Vehicle Optimization Tables" workbook 
-    and returns a corresponding specification of various cases of GMAT model resources.
+    @copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
+    XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
+    https://docs.xlwings.org/en/stable/license.html
+    
+    @author  Colin Helms, colinhelms@outlook.com, [CCH]
  
-@Description
-    Interface Agreement:
-    An Excel workbook exists which contains a sheet named "GMAT" having a
-    contiguous table starting in cell "A1".  The table consists of a first line
-    of parameter names and successive lines of spacecraft properties and 
-    relevant hardware configuration.
+    @details Interface Agreement: An Excel workbook exists which contains a 
+    sheet named "GMAT" having a contiguous table starting in cell "A1".  
+    The table consists of a first line of parameter names and successive lines 
+    of spacecraft properties and relevant hardware configuration.
     
     The first line of table headings may not be exactly the same as GMAT resource names.  
     The associated routine, "modelpov.py" defines a mapping of required GMAT
@@ -51,15 +47,23 @@
         Tables" workbook.  The QFileDialog() from PyQt may be used to browse for the
         workbook file.
     
+    @remarks:
+        Sat Oct 20 09:53:28 2018, [CCH] Created
+        09 Feb 2019, [CCH]commit to GitHub repository GMAT-Automation, Integration Branch.
+        30 Apr 2019, [CCH] Flow Costates and payload mass through to model from worksheet.
+        Wed Apr 20 2022 [CCH] Reordered files and included in sdist preparing to build.
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+
+        
 """
 import os
 import re
 import logging
-from PyQt5.QtWidgets import(QApplication, QFileDialog)
+import numpy as np
 import pywintypes as pwin
 import xlwings as xw
-import modelpov as pov
-import numpy as np
+from PyQt5.QtWidgets import(QApplication, QFileDialog)
+from gmatautomation import modelpov as pov
 
 class Ultima(Exception):
     """ Enclosing exception to ensure that cleanup occurs. """

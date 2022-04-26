@@ -1,30 +1,34 @@
 #! Python
 # -*- coding: utf-8 -*-
 """
-@description: module container for class definition CleanUpData.
+	@file CleanUpData.py
+	@brief File is module container for class definition CCleanUpData.
+	
+	@copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
 
-@author: colinhelms@outlook.com
+	@author  Colin Helms, colinhelms@outlook.com, [CCH]
 
-@Copyright: Copyright (C) 2022 Freelance Rocket Science, All rights reserved.
-
-XlWings Copyright (C) Zoomer Analytics LLC. All rights reserved.
-https://docs.xlwings.org/en/stable/license.html
+    @details Provides minimal ReportFile formatting that yields a memory resident dictionary  
+        rather than an Excel workbook file.
    
-@change:
-    Created on Fri 29 Mar 2022
+    @remark Change History
+        Fri 29 Mar 2022, [CCH] File created, GitHub repository GMAT-Automation.
+        Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+    
+    @bug https://github.com/a093130/GMAT-Automation/issues
 """
 import logging
 import traceback
-import reduce_report as rr
 from pathlib import Path
-from CleanUpReports import CCleanUpReports
-from ..modelgen.gmatlocator import CGMATParticulars
+from gmatautomation import reduce_report as rr
+from gmatautomation import CCleanUpReports
+from gmatautomation import CGmatParticulars
 
 class CCleanUpData(CCleanUpReports): # syntax is module.class.
-    """ Intended as a CleanUp operation that yields a memory resident dictionary rather than a file. 
-        Downstream processing of the dictionary should be specialized using work_on().  Data size 
-        may be very large, especially in batch processing.  The default work_on() simply prints the
-        size of each input dictionary.
+    """ Base Class. Downstream processing of the generated dictionary may be specialized 
+        using work_on(). File processing may also be modified using extend().  
+        The default work_on() simply prints the size of each input dictionary.
+        Note that the dictionary size may be very large.
     """
 
     def __init__(self, **args):
@@ -123,7 +127,7 @@ if __name__ == "__main__":
                  host_attr.processor)
     
 
-    gmat_paths = CGMATParticulars()
+    gmat_paths = CGmatParticulars()
     o_path = gmat_paths.get_output_path()
     """ o_path is an instance of Path that locates the GMAT output directory. """
 
