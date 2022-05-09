@@ -584,7 +584,7 @@ if __name__ == "__main__":
         qApp = QApplication([])
 
         fname = QFileDialog().getOpenFileName(None, 'Open Link Reports batch file', 
-                        o_path,
+                        str(o_path),
                         filter='text files(*.batch)')
 
         logging.info('Link Report batch file is %s', fname[0])
@@ -598,7 +598,7 @@ if __name__ == "__main__":
         print('Link Reports completed.\n')
 
         fname = QFileDialog().getOpenFileName(None, 'Open (SIGHT) Contact Locater Reports batch file.', 
-                        o_path,
+                        str(o_path),
                         filter='Batch files(*.batch)')
 
         logging.info('Contact Locater Report batch file is %s', fname[0])
