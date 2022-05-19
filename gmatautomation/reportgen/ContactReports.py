@@ -193,9 +193,16 @@ class CContactReports(CCleanUpReports):
         cell_2plnum = wb.add_format({'num_format': '0.00'})
         cell_2plnum.set_align('vcenter')
 
+        cell_sep3digint = wb.add_format({'num_format': '0,000'})
+        cell_sep3digint.set_align('vcenter')
+
+        cell_1digint = wb.add_format({'num_format': '0'})
+        cell_1digint.set_align('vcenter')
+
         cell_datetime = wb.add_format({'num_format': rr.dtdict['GMAT1'][1]})
         cell_datetime.set_align('vcenter')
-            
+
+        cellformats = [cell_heading, cell_datetime, cell_wrap, cell_4plnum, cell_2plnum, cell_1digint, cell_sep3digint] 
         try:
             nospc = rr.decimate_spaces(rpt)
             reduced = rr.decimate_commas(nospc)
@@ -207,7 +214,7 @@ class CContactReports(CCleanUpReports):
             lines = rr.lines_from_csv(reduced)
 
             reduced = Path(reduced)
-            if reduced.exists():
+            if reduced.exists(): #ISOLATING TIME REVERSAL
                 reduced.unlink()
 
             lengs = list()
@@ -376,37 +383,46 @@ class CContactReports(CCleanUpReports):
                                 .format(type(ouch), ouch.args[1])) 
                             continue
                         
-                        lreprng = lrsheet.range('A1').expand()
-                        a1gregs = lreprng.columns[0].value 
-                        """ By default aigregs is a List. It is ordered by datetime. """
-                        
-                        data = lreprng.rows[0].value
+                        lrephds = lrsheet.range('A1').expand('right')
                         """ Headings List:
-                            cellval = data[0] is A1Gregorian
-                            cellval = data[2] is Earth Fixed Planetodetic LAT
-                            cellval = data[3] is Earth Fixed Planetodetic LON
-                            cellval = data[4] is Earth Altitude
-                            cellval = data[5] is [AOI] X
-                            cellval = data[6] is [AOI] Y
-                            cellval = data[7] is [AOI] Z
+                            lrephds[0] is A1Gregorian
+                            lrephds[1] is Earth Fixed Planetodetic LAT
+                            lrephds[2] is Earth Fixed Planetodetic LON
+                            lrephds[3] is Earth Altitude
+                            lrephds[4] is [AOI] X
+                            lrephds[5] is [AOI] Y
+                            lrephds[6] is [AOI] Z
                         """
+                        lreprng = lrsheet.range('A2').expand()
+                        a1gregs = lreprng.columns[0].value 
+                        """ By default aigregs is a List. It is ordered by datetime.
+                            a1gregs and lrerprng must have the same number of rows.
+                            Issue 23May2022-001, the heading string was included in the
+                            a1gregs and raised an exception when compared to a datetime
+                            value. Fix - adjust the lreprng to include only data values.
+                        """
+                        
+                        data = lrephds.rows[0].value
                         
                         writerow = 0
                         hformulas = self.formulaheadings()
-                        """ Headings for custom formulas. """
-                        for h in hformulas:
-                            data.append(h)
+                        """ Append headings for custom formulas. """
+                        if len(hformulas) > 0:
+                            for h in hformulas:
+                                data.append(h)
 
                         for col, cellval in enumerate(data):
+                            """ Write the headings. """
                             cellval, leng = rr.heading_row(cellval)
                             lengs.append(leng)
                             sheet.set_column(col, col, leng)
                             sheet.write(writerow, col, cellval, cell_heading)
-                        # End iteration over row 0 for headings
+                        # End iteration over headings
 
                         for times in contacts:
                             writerow += 1
                             for col, cellval in enumerate(times):
+                                """Find Link Report rows that are between contact start and stop times."""
                                 if col == 0:
                                     starttime = cellval
                                     rowstart = bi.bisect_left(a1gregs, starttime)
@@ -424,6 +440,10 @@ class CContactReports(CCleanUpReports):
                                 # End column cases
                             # End iteration over rows of Link Report A1 Gregorian
 
+                            writeformats = [1,4,4,3,3,3,3]
+                            """ Initialize the writeformats array for the worksheet columns 0-6.
+                                Values are each an index into the cell_formats list.
+                            """
                             for row in range(rowstart, rowstop):
                                 """ Write out the Link Report attributes between the start/stop times."""
                                 
@@ -431,62 +451,71 @@ class CContactReports(CCleanUpReports):
                                 basedata = len(data)
 
                                 writerow += 1
-                                formulatxt = self.formulas(writerow)
-                                """ Additional columns of custom Excel formulas. """
-                                for f in formulatxt:
-                                    data.append(f)
+                                formulas = self.formulas(writerow, aoi)
+                                """ Additional columns of custom Excel formulas. The aoi is same as sheet name."""
 
-                                for col, cellval in enumerate(data):            
+                                if len(formulas) > 0:
+                                    """ The cell format for the returned formulas are returned as an array index into cellformats:
+                                        cellformats[0] = cell_heading
+                                        cellformats[1] = cell_datetime
+                                        cellformats[2] = cell_wrap
+                                        cellformats[3] = cell_4plnum
+                                        cellformats[4] = cell_2plnum
+                                        cellformats[5] = cell_1digint
+                                        cellformats[6] = cell_sep3digint
+                                    """                                    
+                                    for f in formulas:
+                                        data.append(f[0])
+                                        writeformats.append(f[1])
+                                
+                                for col, cellval in enumerate(data):         
                                     if col == 0:
-                                        """ Ephemeris """
+                                        """ Ephemeris col is length of formatted string."""
                                         cellstr = cellval.strftime(rr.dtdict['GMAT1'][3]) 
                                         leng = len(cellstr) * 0.85
+                                        """ Update column length"""
                                         if len(lengs) < col + 1:
                                             lengs.append(leng)
                                         if leng > lengs[col]:
                                             lengs[col] = leng
-                                            """ Only update the column width if current data is longer than previous. """
+                                            """ Only update the column width if longer than previous. """
                                         else:
                                             leng = lengs[col]
-                                            
+
+                                        fidx = writeformats[col]  
                                         sheet.set_column(col, col, leng)
-                                        sheet.write(writerow, col, cellval, cell_datetime)
+                                        sheet.write(writerow, col, cellval, cellformats[fidx])
 
                                         continue
 
-                                    elif col in range(1, basedata):
+                                    elif col in range(1, len(data)):
                                         """ Attributes """
-                                        cellstr = '{: 0.4f}'.format(cellval)
-                                        leng = len(cellstr) + 1
+                                        if col < basedata:
+                                            cellstr = '{: 0.4f}'.format(cellval)
+                                            leng = len(cellstr) + 1
+                                        else:
+                                            leng = 12 #workaround
+                                            """ Python does not know the length of values computed by Excel Formulas."""
+                                            """ TODO: Create an array of lent that can be extended with the formulas."""
+
                                         if len(lengs) < col + 1:
                                             lengs.append(leng)
                                         if leng > lengs[col]:
                                             lengs[col] = leng
-                                            """ Only update the column width if current data is longer than previous. """
+                                            """ Only update the column width if current data is longer than previous."""
                                         else:
                                             leng = lengs[col]
-                                            
+                                        
+                                        fidx = writeformats[col]
                                         sheet.set_column(col, col, leng)
-                                        sheet.write(writerow, col, cellval, cell_4plnum)
-
-                                        continue
-
-                                    elif col >= basedata:
-                                        """ Write the custom formulas on this row, starting with nextcolumn"""
-                                        leng = 10 # We do not want the column length = length of the formula string.
-                                        if len(lengs) < col + 1:
-                                            lengs.append(leng)
-                                        if leng > lengs[col]:
-                                            lengs[col] = leng
-
-                                        sheet.set_column(col, col, leng)
-                                        sheet.write_formula(writerow, col, cellval, cell_4plnum)
+                                        sheet.write(writerow, col, cellval, cellformats[fidx])
 
                                         continue
 
                                     else:
-                                        """ Should be impossible to reach, but if so, that's a bad thing. """
+                                        print('Column {0} is out of range for {1}'.format(col, Path(linkfile).name))
                                         raise IndexError('Column {0} is out of range for {1}'.format(col, Path(linkfile).name))
+
                                     # End column cases
                                 # End iteration over row columns
                             # End iteration over start/stop range
@@ -518,8 +547,8 @@ class CContactReports(CCleanUpReports):
 
         except ValueError as e:
             lines = traceback.format_exc().splitlines()
-            logging.error('%s, Incompatible input value, %s.\n%s\n%s\n%s', rpt.name, e.args[0],lines[0], lines[1], lines[-1])
-            print(rpt.name, ', Incompatible input value, ',e.args[0], '\n', lines[0], '\n', lines[1],'\n', lines[-1])
+            logging.error('%s, Incompatible input value, %s.\n%s\n%s\n%s\n%s', rpt.name, e.args[0],lines[0], lines[1], lines[2], lines[-1])
+            print(rpt.name, ', Incompatible input value, ',e.args[0], '\n', lines[0], '\n', lines[1],'\n', lines[2], '\n', lines[-1])
 
         except IndexError as e:
             lines = traceback.format_exc().splitlines()
@@ -541,13 +570,13 @@ class CContactReports(CCleanUpReports):
         finally:
             wb.close()
 
-def formulaheadings(self, row):
-    """ Derived classes may specialize this function. """
-    return list()
+    def formulaheadings(self):
+        """ Derived classes may specialize this function. """
+        return list()
 
-def formulas(self, row):
-    """ Derived classes may specialize this function. """
-    return list()
+    def formulas(self, writerow, aoi):
+        """ Derived classes may specialize this function. """
+        return list()
 
 if __name__ == "__main__":
     __spec__ = None

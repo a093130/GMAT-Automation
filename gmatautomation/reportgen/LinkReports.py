@@ -260,7 +260,7 @@ if __name__ == "__main__":
     qApp = QApplication([])
     
     fname = QFileDialog().getOpenFileName(None, 'Open LinkReport batch file', 
-                    o_path,
+                    str(o_path),
                     filter='text files(*.batch)')
 
     logging.info('Input batch file is %s', fname[0])
