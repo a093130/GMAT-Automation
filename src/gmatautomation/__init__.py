@@ -1,15 +1,11 @@
 #!python
 # # -*- coding: utf-8 -*-
 """
-@Name: GmatAutomation
-@Version: 0.2a1
-
-Created on Sun Apr 28 15:28:56 2019
-Deployed to <PYTHONPATH>/GmatAutomation
+@Name: gmatautomation
+@Version: 0.3b2
 
 @author: Colin Helms
 @author_email: colinhelms@outlook.com
-
 """
 from __future__ import absolute_import
 
@@ -37,6 +33,3 @@ from .reportgen import LinkReports
 from .reportgen.LinkReports import CLinkReports
 from .reportgen import ContactReports
 from .reportgen.ContactReports import CContactReports
-from .reportgen import batch_alfano_rep
-from .reportgen import LinkBudgets
-from .reportgen.LinkBudgets import CLinkBudgets

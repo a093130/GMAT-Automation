@@ -1,16 +1,13 @@
 #!python
 # # -*- coding: utf-8 -*-
 """
-@Name: GmatAutomation 
-@Version: v0.2a1
-
-Created on Sun Apr 28 15:28:56 2019
-Deployed to <PYTHONPATH>/GmatAutomation
+@name: gmatautomation 
+@version: v0.3b1
 
 @author: Colin Helms
 @author_email: colinhelms@outlook.com
 
-@Description: This package contains procedures to autogenerate
+@description: This package contains procedures to autogenerate
 GMAT models from an Excel spredsheet configuration specification.
 
 """

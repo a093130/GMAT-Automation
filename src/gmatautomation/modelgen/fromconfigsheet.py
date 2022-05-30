@@ -60,7 +60,7 @@ import os
 import re
 import logging
 import numpy as np
-import pywintypes as pwin
+from win32ctypes import pywintypes as pwin
 import xlwings as xw
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
 from gmatautomation import modelpov as pov
