@@ -28,7 +28,7 @@ from .modelgen import fromconfigsheet
 from .modelgen import modelgen
 from .modelcontrol import gmat_batcher
 from .reportgen import reduce_report
-from .reportgen import batch_alfano_rep
+
 from .reportgen import CleanUpReports
 from .reportgen.CleanUpReports import CCleanUpReports
 from .reportgen import CleanUpData
@@ -37,5 +37,6 @@ from .reportgen import LinkReports
 from .reportgen.LinkReports import CLinkReports
 from .reportgen import ContactReports
 from .reportgen.ContactReports import CContactReports
+from .reportgen import batch_alfano_rep
 from .reportgen import LinkBudgets
 from .reportgen.LinkBudgets import CLinkBudgets
