@@ -149,7 +149,9 @@ if __name__ == "__main__":
 
     """ Batch Processing of .txt Report Files. """
     msg = 'Open ReportFile.batch file naming the GMAT Report Files to be processed.'
-    fbatch = QFileDialog().getOpenFileName(None, msg, o_path, filter='Batch files(*.batch)')
+    #fbatch = QFileDialog().getOpenFileName(None, msg, o_path, filter='Batch files(*.batch)')
+    fbatch = QFileDialog().getOpenFileName(None, msg, str(o_path), filter='Batch files(*.batch)')
+    #Fix for github gmatautomation issue #5
     fbatch = Path(fbatch[0])
 
     try:        

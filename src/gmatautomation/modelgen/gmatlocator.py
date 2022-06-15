@@ -36,7 +36,9 @@ class CGmatParticulars():
         logging.debug('Instance of class GMAT_Particulars constructed.')
         super().__init__(**args)
 
-        self.p_gmat = Path(os.getenv('LOCALAPPDATA'))/'GMAT'
+        #self.p_gmat = Path(os.getenv('LOCALAPPDATA'))/'GMAT'
+        self.p_gmat = Path(os.getenv('LOCALAPPDATA'))
+        # Fix for gmatautomation project issue #4.
         self.executable_path = None
         self.startup_file_path = None
         self.output_path = None                     
