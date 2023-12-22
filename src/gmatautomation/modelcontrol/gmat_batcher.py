@@ -1,5 +1,6 @@
 #! python
 # -*- coding: utf-8 -*-
+
 """
     @file gmat_batcher.py
 
@@ -8,15 +9,21 @@
 
     @copyright: Copyright (C) 2019 - 2022 Freelance Rocket Science, All rights reserved.
 
+    @version 0.4b1
+
     @author  Colin Helms, colinhelms@outlook.com, [CCH]
 
-    @details:
-    Assumption 1: GMAT.exe is in the executable path.
-    Assumption 2: A batchfile exists in the user's directory 
-        consisting of a line-by-line list of model filenames to be executed.
-    Assumption 3: The user's platform is capable of executing each model file
-        with 5 minutes.  If not, change the cpto global variable below.
-    
+    @details: The multiprocessing Pool is used to execute multiple instances of GMAT in the
+    command line mode.  Scripts are read line-by-line from a batchfile consisting of a line-by-line
+    list of model file paths to be executed.
+        Assumption: the user's platform is capable of executing each model file
+    within 5 minutes.  If not, change the cpto global variable below.
+        Use of the GMAT Python interface requires setup of the environment per the GMAT
+    Reference Guide.  This includes limitation on the version of Python.  It is convenient
+    to use a conda environment to execute GMAT.  However in order to do this with gmat_batcher
+    the GMAT conda environment must be set up first.  Use a batch file similar to how GMAT is
+    Started.
+
     @remark Change History
         Wed Feb  6 2019, Created.
         10 Jan 2019, [CCH] commit to GitHub repository GMAT-Automation, Integration Branch.
@@ -25,11 +32,15 @@
         31 July 2019, [CCH] Added progress indicator using Manager.Queue. Updated cpto to 315.
         Wed Apr 20 14:54:49 2022, [CCH] reorganized and included in sdist
         Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
+        Wed Dec 20 2023 [CCH] Use gmatlocator to get gmat executable path. Added instructions for
+        Conda virtual environment.  Better filtering of filepaths read from the batchfile.
 
-    @bug https://github.com/a093130/GMAT-Automation/issues                
+    @bug https://github.com/a093130/GMAT-Automation/issues
 """
+
 from __future__ import division
 """ Must be at the top of the file - maps features supported in future python versions """
+
 import os
 import sys
 import time
@@ -40,6 +51,8 @@ import traceback
 import getpass
 import random
 import subprocess as sp
+from gmatautomation import gmatlocator as locator
+from pathlib import Path
 from multiprocessing import Pool
 from multiprocessing import cpu_count
 from multiprocessing import Manager
@@ -73,9 +86,11 @@ def run_gmat(args):
     """ Output Queue """
     
     scriptname = os.path.basename(args[0])
-        
+    gmatloc = locator.CGmatParticulars()
+    gmatexe = gmatloc.get_executable_path()
+    scriptpath = Path(args[0])
     try:
-        proc = sp.Popen(['gmat', '-m', '-ns', '-x', '-r', str(args[0])], stdout=sp.PIPE, stderr=sp.STDOUT)   
+        proc = sp.Popen([str(gmatexe), '-m', '-ns', '-x', '-r', scriptpath.as_posix()], stdout=sp.PIPE, stderr=sp.STDOUT)   
         """ Run GMAT for path names passed as args[0].  The GMAT executable must be in the system path.
         GMAT Arguments:
         -m: Start GMAT with a minimized interface.
@@ -178,7 +193,8 @@ if __name__ == "__main__":
 #    ninstances = 4
     ninstances = 1
     nmsg = 0
-    
+    regecr = re.compile('\n')
+
     mgr = Manager()
     task_queue = mgr.Queue()
     stat_queue = mgr.Queue()
@@ -190,17 +206,24 @@ if __name__ == "__main__":
             """ This is the master batch file selected in QtFileDialog. """
             numjobs = 0
             for filename in f:
-                """ It must be cleaned up for GMAT to recognize it. """
-                gmat_arg = os.path.normpath(filename)
-                rege = re.compile('\n')
-                gmat_arg = rege.sub('', gmat_arg)
+                filename = regecr.sub('',filename)
+                filepath = Path(filename)
+                if filepath.suffix != '.script':
+                    continue
+                if filepath.exists():
+                    """ It must be cleaned up for GMAT to recognize it. """
+                    gmat_arg = os.path.normpath(filename)
+                    #gmat_arg = regecr.sub('', gmat_arg)
 
-                logging.debug("Path to scriptfile is %s", gmat_arg)
-                scriptname = os.path.basename(filename)
-                
-                gmat_args.append([gmat_arg, task_queue])
-                
-                numjobs += 1
+                    logging.debug("Path to scriptfile is %s", gmat_arg)
+                    scriptname = os.path.basename(filename)
+                    
+                    gmat_args.append([gmat_arg, task_queue])
+                    
+                    numjobs += 1
+                else:
+                    msg = 'filepath {0} does not exist.'.format(filename)
+                    continue
                         
         progress = QProgressDialog("{0} Jobs ...".format(numjobs), "Cancel", 0, numjobs)
         progress.setWindowTitle('Executing Batch')
@@ -229,13 +252,14 @@ if __name__ == "__main__":
         
         pool.close()
         
-        print('Reading Job output queue, finishing up.')
+        print('Reading Job output queue, finishing up. See BatcherLog.log for GMAT status.')
         
         while(True):           
             qout = task_queue.get(cpto)
-#            
-            logging.info('GMAT reports: {0}'.format(qout))
-#                        
+           
+            msg = 'GMAT reports: {0}'.format(qout) 
+            logging.info(msg)
+                       
             if task_queue.qsize() < 1:
                 break
         
