@@ -20,8 +20,12 @@ del sys
 from .modelgen import gmatlocator
 from .modelgen.gmatlocator import CGmatParticulars
 from .modelgen import modelpov
+from .modelgen import modelspec
+from .modelgen.modelspec import CModelSpec
 from .modelgen import fromconfigsheet
 from .modelgen import modelgen
+from .modelgen import userexceptions
+from .modelgen.userexceptions import Ultima
 from .modelcontrol import gmat_batcher
 from .reportgen import reduce_report
 
