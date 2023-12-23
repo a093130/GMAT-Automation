@@ -133,6 +133,7 @@ class CGmatParticulars():
                             outp = rootpath/outp
                             self.output_path = outp.resolve()
                         else:
+                            line = line.split('=')[1] # Fix to remove 'OutpuPath='
                             self.output_path = Path(line)
                     else:
                         continue
