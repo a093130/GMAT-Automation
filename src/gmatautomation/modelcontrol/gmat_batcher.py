@@ -34,6 +34,9 @@
         Tue Apr 26 2022 [CCH] Version 0.2a1, Buildable package, locally deployable.
         Wed Dec 20 2023 [CCH] Use gmatlocator to get gmat executable path. Added instructions for
         Conda virtual environment.  Better filtering of filepaths read from the batchfile.
+        Wed Dec 27 2023.  Too many jobs are timing out. Set cpto to 600. 
+        Sun Dec 31 2023. Set cpto and rsrv_cpus via command line argument.
+    
 
     @bug https://github.com/a093130/GMAT-Automation/issues
 """
@@ -44,6 +47,7 @@ from __future__ import division
 import os
 import sys
 import time
+import argparse
 import re
 import platform
 import logging
@@ -51,21 +55,12 @@ import traceback
 import getpass
 import random
 import subprocess as sp
-from gmatautomation import gmatlocator as locator
+import gmatlocator as locator
 from pathlib import Path
 from multiprocessing import Pool
 from multiprocessing import cpu_count
 from multiprocessing import Manager
 from PyQt5.QtWidgets import(QApplication, QFileDialog, QProgressDialog)
-
-cpto = 315
-""" Child process timeout = 5 minutes 15 secs: more than sufficient on dual 2.13GHz E5506 XEON, 
-16 Gbyte workstation with GTX 750 GPU. For the JS&R paper, run1 07/25/2019, a maximum GMAT run
-time of 294 seconds was recorded for Batch_64HET6342W_36000.0kg_22Sep2020_R6.13_51.6deg_-0.832_J206_235431.script.
-Change 31 Jul 2019: Was cpto = 300, Is cpto = 315.
-"""
-rsrv_cpus = 2
-""" Reserve 2 cores for system processes and services (daemons). Spikes on process context swap. """
 
 def delay_run():
     """ Helper to randomize start of child processes. Minimizes GMAT log file collisions. """
@@ -178,6 +173,25 @@ if __name__ == "__main__":
                  host_attr.version, \
                  host_attr.processor)
     
+    parser = argparse.ArgumentParser(description='gmat_batcher parallelizes GMAT execution using Python subprocess.',\
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    
+    parser.add_argument('--cpto', type=int, help='per process timeout (secs)', default=600)
+    """ Child process timeout = 10 minutes: If the BatcherLog.log is showing "GMAT reports: GMAT: Timeout Expired"
+    Set this to a larger timeout value on the command line, or investigate why the GMAT process is taking so long.
+    """
+    parser.add_argument('--rsrv', type=int, help='number of cores to reserve for system', default=2)
+    """ System usage spikes on process context swap. Reserve 2 cores for system processes and services (daemons).
+    This results in 94-95% cpu utilization shown in the performance monitor. 
+    """
+    
+    args = parser.parse_args() # uses sys.argv by default
+    options = vars(args)
+    cpto = options['cpto']
+    rsrv_cpus = options['rsrv']
+
+    logging.info('batcher.py configuration is: cpto={0}, rsrv_cpus={1}'.format(cpto,rsrv_cpus))
+
     QApp = QApplication([])
     QApp.processEvents()
     
