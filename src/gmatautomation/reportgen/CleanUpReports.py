@@ -21,8 +21,8 @@ import re
 import logging
 import traceback
 from pathlib import Path
-from gmatautomation import reduce_report as rr
-
+#from gmatautomation import reduce_report as rr
+import reduce_report as rr
 class CCleanUpReports:
     """ Base Class.  Designed for specialization through overload of the extend function.
     """

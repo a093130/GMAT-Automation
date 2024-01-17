@@ -33,8 +33,8 @@ import datetime as dt
 import xlsxwriter as xwrt
 import xlsxwriter.utility as xlut
 from PyQt5.QtWidgets import(QApplication, QFileDialog)
-from gmatautomation import CGmatParticulars
-
+#from gmatautomation import CGmatParticulars
+from gmatlocator import CGmatParticulars
 dtdict = {'GMAT1':[r'21 Mar 2024 04:52:31.467',
             'd mmm yyyy hh:mm:ss.000',
             r'^\d\d\s[A-S][a-z]+\s\d\d\d\d\s\d\d:\d\d:\d\d.\d\d\d',
@@ -374,11 +374,11 @@ if __name__ == "__main__":
     qApp = QApplication([])
     
     fname = QFileDialog().getOpenFileName(None, 'Open REPORT File. NOT BATCH!', 
-                    o_path,
-                    filter='text files(*.txt *.csv)')
+                    str(o_path),
+                    filter='text files(*.txt *.csv *.gmd)')
 
     logging.info('Input report file is %s', fname[0])
-
+    xlfile = 'no filename returned'
     try:
         """ Test Case 1: Run through the toolchain to create an Excel File. """
         nospc = decimate_spaces(fname[0])
